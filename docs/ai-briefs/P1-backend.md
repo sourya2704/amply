@@ -1,41 +1,34 @@
-# AI Brief — P1: Backend (Shourya + Claude)
+# AI Brief — P1: Backend (Go)
 
-Read `docs/WORKFLOW.md` and `docs/api-contract.md` first. We implement the contract exactly and own it.
+Read `docs/WORKFLOW.md` and `docs/api-contract.md` first. P1 owns the contract and implements it exactly.
 
 ## Owned
-`backend/` except `backend/app/agent/` (P3) and `backend/seed/` (P4). Also `docs/api-contract.md`.
+`backend/` except `backend/seed/` (P4 edits seed JSON; P1 reloads it).
 
 ## Stack
-FastAPI + Pydantic v2 · SQLAlchemy 2.0 (async, asyncpg) · Postgres + PostGIS on Supabase/Neon (shared by the team) ·
-`python-jose` JWT + `passlib[bcrypt]` · `razorpay` SDK (test mode) · schema in a plain `sql/schema.sql` (no Alembic tonight).
+Go 1.26, standard library `net/http` (method + path patterns), SQLite via `modernc.org/sqlite` (pure Go, no cgo),
+`github.com/google/uuid`. Single `package main`. No framework, no ORM.
 
-## Layout
-```
-backend/
-  app/main.py                 # app, CORS, error handler, include routers (incl. app.agent.router)
-  app/core/config.py db.py auth.py errors.py
-  app/models/                 # SQLAlchemy models
-  app/schemas/                # Pydantic shapes = contract §2
-  app/routers/                # auth, vehicles, chargers, owner, bookings, payments, reports, admin
-  app/services/               # compatibility, pricing, availability, booking (state machine), risk, audit
-  app/seed.py                 # loads backend/seed/*.json (reset + load)
-  sql/schema.sql
-  requirements.txt  .env.example
-```
+## Files
+| File | What |
+|---|---|
+| `main.go` | config from env/`.env`, `-reset` flag, startup seed |
+| `db.go` | schema, seed loader for `seed/*.json` |
+| `logic.go` | availability labels, compatibility, pricing, distance, slots, state machine. **Pure functions** |
+| `models.go` | API JSON shapes + DB row loading |
+| `http.go` | routes, demo auth (HMAC-signed token), agent reverse proxy, CORS, logging |
+| `handlers.go` | endpoint handlers |
+| `api_test.go` | end-to-end tests: booking loop, double booking under concurrency, agent proxy down |
 
-## Order of work
-1. **H0–H1:** DB + PostGIS + `btree_gist`, `schema.sql`, FastAPI skeleton, `/api/health`, CORS, error format. Push.
-2. **H1–H2:** auth (register/login/me, roles), `get_current_user` + `require_role` (P3 imports `get_current_user`), vehicles.
-3. **H2–H4:** charger search (`ST_DWithin` + compatibility filter + availability label + private coord rounding), detail,
-   slots, estimate, seed loader. Make it reachable on LAN/deployed → **Checkpoint 1**.
-4. **H4–H6:** bookings + state machine + events + exclusion constraint + idempotency, owner endpoints, lazy expiry.
-5. **H6–H7:** Razorpay order/verify (HMAC signature check), address/access-instruction reveal → **Checkpoint 2**.
-6. **H7–H9:** admin endpoints, risk scan rules, audit logs, stats, reports, reviews. Deploy (Render/Railway).
-7. **H9+:** bug fixes, reseed script for demo.
+## Rules
+- Money in integer paise; times stored as unix seconds, returned as RFC 3339 in IST.
+- `db.SetMaxOpenConns(1)` serializes writes, so the overlap check + insert in `createBooking` is race-free.
+  Inside a transaction, only use `tx`, never `a.db` (that would deadlock on the single connection).
+- State changes use a conditional `UPDATE … WHERE status IN (...)` and always write a `booking_events` row.
+- Address and access instructions are only returned for confirmed/completed bookings or to the owner.
+- Run `go vet ./... && go test ./...` before every merge.
 
-## Key rules
-- Money in integer paise; `timestamptz` everywhere.
-- Exclusion constraint on `bookings (charger_id =, tstzrange(start_at,end_at) &&)` where status in
-  requested/accepted/confirmed/in_progress → catch `ExclusionViolation` → 409 `SLOT_TAKEN`.
-- Every booking transition writes a `booking_events` row and an `audit_logs` row; every admin action writes to the audit log.
-- Never return `address` / `access_instructions` to drivers before `confirmed`.
+## Status / next
+- [x] Full prototype API per contract, tested
+- [ ] Deploy (Render/Railway/Fly: `go build`, persistent disk for the `.db` file or reseed on boot)
+- [ ] Stretch: `GET /api/admin/chargers?status=submitted` + approve (only if time allows)

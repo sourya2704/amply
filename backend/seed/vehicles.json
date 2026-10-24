@@ -1,0 +1,8 @@
+[
+  { "owner_email": "driver@amply.test", "make": "Tata", "model": "Nexon EV", "category": "car",
+    "connectors": ["CCS2", "TYPE2"], "max_ac_kw": 7.2, "max_dc_kw": 50, "battery_kwh": 40.5 },
+  { "owner_email": "driver@amply.test", "make": "MG", "model": "Comet EV", "category": "car",
+    "connectors": ["TYPE2"], "max_ac_kw": 3.3, "max_dc_kw": 0, "battery_kwh": 17.3 },
+  { "owner_email": "driver2@amply.test", "make": "Tata", "model": "Punch EV", "category": "car",
+    "connectors": ["CCS2", "TYPE2"], "max_ac_kw": 7.2, "max_dc_kw": 50, "battery_kwh": 35 }
+]

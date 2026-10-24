@@ -40,7 +40,7 @@ Amply combines three layers:
 - **Geospatial search:** nearby chargers via PostGIS, filtered by connector, mode, power, price, distance, and bookability.
 - **Honest availability:** every charger is labelled *Live*, *Schedule-based*, *Reported*, *Stale*, or *Unknown*.
 - **Booking:** slot-based reservations with owner approval. Double booking is blocked by a database constraint, and every state change is logged.
-- **Payments:** Razorpay (test mode) with transparent fees and idempotent processing.
+- **Payments:** mock checkout in the prototype (Razorpay planned), with transparent fees and idempotent booking requests.
 - **Trust and safety:** reports, reviews tied to completed bookings, AI risk flags for human review, and audit logs.
 
 ### Booking lifecycle
@@ -70,21 +70,21 @@ compatibility, booking, or payment rules. It treats listing text and reviews as 
 | Layer | Technology |
 |---|---|
 | Web app | React, Vite, TypeScript, Tailwind CSS, Leaflet (OpenStreetMap) |
-| API | Python, FastAPI, Pydantic |
-| Database | PostgreSQL + PostGIS |
-| AI | Claude API with tool calling |
-| Maps / routing | OpenStreetMap, OSRM |
-| Payments | Razorpay (test mode) |
+| API | Go (standard library `net/http`) |
+| Database | SQLite (prototype) → PostgreSQL + PostGIS for production |
+| AI | Python agent service, Claude API with tool calling |
+| Maps | OpenStreetMap (Leaflet) |
+| Payments | Mock payment (prototype) → Razorpay later |
 
 ```
 React web app
       │
-FastAPI ── auth · roles · rate limits
+Go API ── auth · roles
       ├── Marketplace services: users · vehicles · chargers · availability · search · bookings · payments · reviews · admin
-      ├── AI orchestration: discovery · route · booking assistant · risk triage
+      ├── /api/agent/* ──▶ Python AI agent (calls the API back with the user's permissions)
       └── Integrations: maps/routing · payments
       │
-PostgreSQL + PostGIS · audit logs
+SQLite · booking event history
 ```
 
 ## MVP scope
@@ -112,3 +112,11 @@ autonomous fraud enforcement, or nationwide coverage.
 ---
 
 *Amply is a working name; trademark and domain availability are still to be confirmed.*
+
+## Running the backend
+```bash
+cd backend
+go run .            # starts on :8000 and seeds demo data on first run
+go run . -reset     # wipe and reseed
+go test ./...       # booking loop + double-booking tests
+```

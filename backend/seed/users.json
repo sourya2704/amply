@@ -1,0 +1,8 @@
+[
+  { "name": "Arjun Mehta",   "email": "driver@amply.test",  "roles": ["driver"] },
+  { "name": "Neha Rao",      "email": "driver2@amply.test", "roles": ["driver"] },
+  { "name": "Ravi Kumar",    "email": "owner@amply.test",   "roles": ["owner", "driver"] },
+  { "name": "Priya Nair",    "email": "owner2@amply.test",  "roles": ["owner"] },
+  { "name": "Brew & Charge Café", "email": "cafe@amply.test", "roles": ["owner"] },
+  { "name": "Amply Admin",   "email": "admin@amply.test",   "roles": ["admin"] }
+]
