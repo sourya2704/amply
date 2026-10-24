@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // IST is used for all slot math and API output. Fixed offset avoids needing tzdata on the server.
@@ -18,15 +20,19 @@ type Config struct {
 	Port        string
 	DBPath      string
 	SeedDir     string
-	AgentURL    string
+	StaticDir   string
+	AgentModel  string
 	AuthSecret  string
 	CORSOrigins string
 }
 
 type App struct {
-	db  *sql.DB
-	cfg Config
-	now func() time.Time
+	db      *sql.DB
+	cfg     Config
+	now     func() time.Time
+	handler http.Handler      // set by routes(); the agent calls the API through it in-process
+	llm     *anthropic.Client // nil → agent runs in offline mode
+	pending pendingStore
 }
 
 func main() {
@@ -38,7 +44,8 @@ func main() {
 		Port:        env("PORT", "8000"),
 		DBPath:      env("DB_PATH", "amply.db"),
 		SeedDir:     env("SEED_DIR", "seed"),
-		AgentURL:    env("AGENT_URL", "http://localhost:8001"),
+		StaticDir:   env("STATIC_DIR", "../frontend/dist"),
+		AgentModel:  env("AGENT_MODEL", "claude-opus-5-5"),
 		AuthSecret:  env("AUTH_SECRET", "dev-only-secret-change-me"),
 		CORSOrigins: env("CORS_ORIGINS", "*"),
 	}
@@ -65,7 +72,13 @@ func main() {
 	}
 
 	app := &App{db: db, cfg: cfg, now: time.Now}
-	log.Printf("Amply API listening on :%s (agent proxy → %s)", cfg.Port, cfg.AgentURL)
+	mode := "offline mode (set ANTHROPIC_API_KEY for Claude)"
+	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		client := anthropic.NewClient()
+		app.llm = &client
+		mode = "Claude " + cfg.AgentModel
+	}
+	log.Printf("Amply listening on http://localhost:%s, AI assistant: %s", cfg.Port, mode)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, app.routes()))
 }
 

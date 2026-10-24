@@ -16,7 +16,7 @@ import (
 // ---- vehicles ----
 
 func (a *App) listVehicles(w http.ResponseWriter, r *http.Request, u *User) {
-	rows, err := a.db.Query(`SELECT id FROM vehicles WHERE user_id = ? ORDER BY make, model`, u.ID)
+	rows, err := a.db.Query(`SELECT id FROM vehicles WHERE user_id = ? ORDER BY rowid`, u.ID)
 	if err != nil {
 		serverError(w, err)
 		return

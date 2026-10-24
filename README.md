@@ -36,12 +36,12 @@ Amply combines three layers:
 ## Key features
 - **Accounts and roles:** one user can be both driver and owner; permissions are enforced server-side.
 - **Vehicle profiles:** make/model, connectors, AC/DC power limits. Missing specs are treated as *unknown*, never assumed.
-- **Charger listings:** lifecycle Draft → Submitted → Approved/Rejected, with pause and resume. Private addresses stay hidden until a booking is confirmed.
-- **Geospatial search:** nearby chargers via PostGIS, filtered by connector, mode, power, price, distance, and bookability.
+- **Charger listings:** owners submit a charger → admin approves or rejects → it goes live. Private addresses stay hidden until a booking is paid.
+- **Nearby search:** map search filtered by connector, mode, power, price, distance, and bookability (PostGIS planned for scale).
 - **Honest availability:** every charger is labelled *Live*, *Schedule-based*, *Reported*, *Stale*, or *Unknown*.
-- **Booking:** slot-based reservations with owner approval. Double booking is blocked by a database constraint, and every state change is logged.
+- **Booking:** slot-based reservations with owner approval. Double booking is blocked by serialized database transactions, and every state change is logged in a timeline.
 - **Payments:** mock checkout in the prototype (Razorpay planned), with transparent fees and idempotent booking requests.
-- **Trust and safety:** reports, reviews tied to completed bookings, AI risk flags for human review, and audit logs.
+- **Trust and safety:** listing verification, user reports with recorded outcomes, and rule-based risk flags (duplicates, price outliers, report and cancellation spikes) for human review.
 
 ### Booking lifecycle
 ```
@@ -72,7 +72,7 @@ compatibility, booking, or payment rules. It treats listing text and reviews as 
 | Web app | React, Vite, TypeScript, Tailwind CSS, Leaflet (OpenStreetMap) |
 | API | Go (standard library `net/http`) |
 | Database | SQLite (prototype) → PostgreSQL + PostGIS for production |
-| AI | Python agent service, Claude API with tool calling |
+| AI | Claude API tool use (Anthropic Go SDK), built into the Go server |
 | Maps | OpenStreetMap (Leaflet) |
 | Payments | Mock payment (prototype) → Razorpay later |
 
@@ -81,18 +81,19 @@ React web app
       │
 Go API ── auth · roles
       ├── Marketplace services: users · vehicles · chargers · availability · search · bookings · payments · reviews · admin
-      ├── /api/agent/* ──▶ Python AI agent (calls the API back with the user's permissions)
+      ├── AI assistant ──▶ Claude tool use, calling the same API with the user's permissions
       └── Integrations: maps/routing · payments
       │
 SQLite · booking event history
 ```
 
-## MVP scope
-**In:** accounts and roles, vehicle profiles, owner onboarding, map search, compatibility filtering, availability display,
-booking with owner approval, test-mode payments, AI assistant, route suggestions, risk review, reports, and admin tools.
+## Prototype scope
+**Built:** demo login with roles, vehicle profiles, owner listing + admin verification, map search, compatibility
+filtering, honest availability labels, slot booking with owner approval, mock payment, AI assistant (search, explain,
+book with confirmation), rule-based risk flags, user reports, and admin tools.
 
-**Not yet:** building physical stations, guaranteed live status for third-party stations, smart-charger hardware control,
-autonomous fraud enforcement, or nationwide coverage.
+**Not yet:** real sign-up and payments (Razorpay), route planning, reviews, notifications, live operator data,
+smart-charger control, and the separate risk/support AI agents described above.
 
 ## Business model (hypotheses to validate)
 - Transparent service fee on eligible bookings
@@ -113,10 +114,12 @@ autonomous fraud enforcement, or nationwide coverage.
 
 *Amply is a working name; trademark and domain availability are still to be confirmed.*
 
-## Running the backend
+## Run the prototype
 ```bash
-cd backend
-go run .            # starts on :8000 and seeds demo data on first run
-go run . -reset     # wipe and reseed
-go test ./...       # booking loop + double-booking tests
+cd frontend && npm install && npm run build
+cd ../backend && go run . -reset        # http://localhost:8000
 ```
+Log in with one of the demo accounts on the login page. Optional: add `ANTHROPIC_API_KEY` to `backend/.env` for the
+Claude-powered assistant (without it, a labelled offline planner is used). Tests: `cd backend && go test ./...`.
+
+Docs: [team guide](docs/WORKFLOW.md) · [API contract](docs/api-contract.md) · [demo script](docs/demo-script.md) · [pitch outline](pitch/pitch-outline.md)

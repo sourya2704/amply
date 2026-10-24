@@ -1,8 +1,7 @@
 # Amply API Contract — Prototype
 
 **Single source of truth.** Frontend (P2), AI agent (P3), and admin/seed work (P4) code against this file.
-The backend (P1, Go) implements it, and `backend/api_test.go` checks the main flows. Don't invent endpoints or fields.
-Need a change? See the last section.
+The Go backend implements it, and `backend/api_test.go` checks the main flows. Don't invent endpoints or fields.
 
 ---
 
@@ -21,7 +20,7 @@ Need a change? See the last section.
 
 ### Error codes
 `UNAUTHORIZED` 401 · `FORBIDDEN` 403 · `NOT_FOUND` 404 · `VALIDATION_ERROR` 422 · `INCOMPATIBLE` 422 ·
-`SLOT_TAKEN` 409 · `INVALID_STATE` 409 · `AGENT_UNAVAILABLE` 502 · `SERVER_ERROR` 500
+`SLOT_TAKEN` 409 · `INVALID_STATE` 409 · `CONFIRMATION_EXPIRED` 410 · `SERVER_ERROR` 500
 
 ---
 
@@ -32,7 +31,7 @@ Role            = "driver" | "owner" | "admin"
 Connector       = "CCS2" | "TYPE2" | "CHADEMO" | "GBT"
 ChargingMode    = "AC" | "DC"
 ChargerCategory = "private" | "business" | "public"
-ListingStatus   = "approved" | "submitted"        (search only shows approved)
+ListingStatus   = "submitted" | "approved" | "rejected"   (search only shows approved)
 AvailabilitySrc = "live" | "schedule" | "reported" | "stale" | "unknown"
 Compatibility   = "compatible" | "incompatible" | "unknown"
 BookingStatus   = "requested" | "accepted" | "confirmed" | "completed" | "rejected" | "cancelled"
@@ -121,6 +120,7 @@ Everything except `health`, `demo-users`, and `login` needs the Bearer token.
 | Method | Path | Query / body | Returns |
 |---|---|---|---|
 | GET | `/api/vehicles` | — | `Vehicle[]` (the logged-in user's) |
+| POST | `/api/vehicles` | `Vehicle` without `id` | `201 Vehicle` |
 | GET | `/api/chargers/search` | `lat, lng` (required), `radius_km=5, vehicle_id?, connector?, mode?, max_price_paise?, min_power_kw?, bookable_only=false` | `{results: ChargerSummary[], excluded_incompatible: number}`, sorted by distance |
 | GET | `/api/chargers/{id}` | `vehicle_id?` | `ChargerDetail` |
 | GET | `/api/chargers/{id}/slots` | `date=YYYY-MM-DD` | `{charger_id, date, slot_minutes: 60, bookable, availability, slots: [{start_at, end_at, available}]}` |
@@ -150,32 +150,56 @@ charger must be `bookable`. Errors: `409 SLOT_TAKEN` (slot already held by reque
 |---|---|---|---|
 | GET | `/api/owner/chargers` | — | `ChargerDetail[]` (with address) |
 | GET | `/api/owner/bookings` | `status?` | `Booking[]` for the owner's chargers. Poll every 5 s for the demo |
+| POST | `/api/owner/chargers` | seed-format charger (§4) without `owner_email`/`status` | `201 ChargerDetail` with status `submitted` (goes to admin review) |
 
-### AI agent: P3's Python service, reached through the Go API
-Go forwards everything under `/api/agent/*` to `AGENT_URL` (default `http://localhost:8001`), unchanged, including
-the `Authorization` header. If the agent isn't running → `502 AGENT_UNAVAILABLE`.
+### Reports
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/api/reports` | `{target_type: "charger"\|"user"\|"booking", target_id, reason}` | `204` |
+
+### Admin (role `admin`; humans decide, nothing is enforced automatically)
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/admin/stats` | — | `{chargers_live, pending_listings, bookings_total, completed_sessions, open_reports}` |
+| GET | `/api/admin/chargers` | query `status=submitted` | `ChargerDetail[]` |
+| POST | `/api/admin/chargers/{id}/approve` · `/reject` | `{note?}` | `ChargerDetail` |
+| GET | `/api/admin/risk` | — | `[{target_type, target_id, target_label, score, signals[]}]` |
+| GET | `/api/admin/reports` | — | `[{id, reporter_name, target_type, target_id, target_label, reason, status, resolution, created_at}]` |
+| POST | `/api/admin/reports/{id}/resolve` | `{resolution}` | `204` |
+
+Risk rules: two listings within 30 m from different owners (duplicate) · price > 3× the median ·
+≥ 2 open reports on a charger · ≥ 3 cancellations by one driver in 24 h.
+
+### AI agent (built into the Go server)
+The agent never touches the database: each tool calls the API in-process with the user's token, so it has exactly the
+user's permissions. It never books by itself. `prepare_booking` only creates a pending action, and the booking is made
+when the user clicks Confirm. With `ANTHROPIC_API_KEY` set it uses Claude tool use; without it, a clearly labelled
+offline planner uses the same tools.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| POST | `/api/agent/chat` | `{messages: [{role: "user"|"assistant", content}], vehicle_id?, location?: {lat, lng}}` | `AgentResponse` |
-| POST | `/api/agent/confirm` | `{confirmation_id}` | `Booking` (410 `CONFIRMATION_EXPIRED` after 10 min) |
+| POST | `/api/agent/chat` | `{messages: [{role: "user"\|"assistant", content}], vehicle_id?, location?: {lat, lng}}` | `AgentResponse` |
+| POST | `/api/agent/confirm` | `{confirmation_id}` | `201 Booking` (`410 CONFIRMATION_EXPIRED` after 10 min, `404` if it isn't yours) |
 
 ```jsonc
 // AgentResponse
 { "reply": "markdown text",
-  "tool_trace": [ { "tool": "search_chargers", "ok": true, "summary": "Found 8, hid 2 incompatible" } ],
+  "history_content": "reply + [Chargers shown: name = id]; send THIS back as the assistant turn",
+  "mode": "ai" | "offline",
+  "tool_trace": [ { "tool": "search_chargers", "ok": true, "summary": "Found 8 near Koramangala, hid 3 incompatible" } ],
   "cards": [ /* ChargerSummary[] */ ],
   "pending_action": null | {
      "type": "booking", "confirmation_id": "uuid", "expires_at": "...",
-     "summary": { "charger_name": "...", "start_at": "...", "end_at": "...", "price": { /* PriceBreakdown */ } } } }
+     "summary": { "charger_id", "charger_name", "approx_area", "vehicle", "start_at", "end_at", "price": PriceBreakdown, "cancellation_policy" } } }
 ```
+Tools: `search_chargers`, `get_charger`, `get_slots`, `estimate_cost`, `prepare_booking`, `list_my_bookings`, `show_chargers`.
 
 ---
 
-## 4. Seed data (P4 edits `backend/seed/*.json`, P1 reloads with `go run . -reset`)
+## 4. Seed data (edit `backend/seed/*.json`, reload with `go run . -reset`)
 
 Demo accounts: `driver@amply.test` · `driver2@amply.test` · `owner@amply.test` · `owner2@amply.test` ·
-`cafe@amply.test` · `admin@amply.test`
+`cafe@amply.test` · `admin@amply.test`. Login is email only, no passwords (prototype).
 
 ```jsonc
 // users.json
@@ -198,8 +222,3 @@ Demo accounts: `driver@amply.test` · `driver2@amply.test` · `owner@amply.test`
 ```
 
 ---
-
-## 5. Changing the contract
-1. Add a line to `docs/contract-changes.md` (who, what, why).
-2. Post `CONTRACT CHANGE:` in the team chat.
-3. P1 implements it and updates this file. Don't code against a change until it's here.

@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -26,6 +26,7 @@ func (a *App) routes() http.Handler {
 	auth := func(h func(http.ResponseWriter, *http.Request, *User)) http.HandlerFunc { return a.withUser(h) }
 	mux.HandleFunc("GET /api/me", auth(func(w http.ResponseWriter, r *http.Request, u *User) { writeJSON(w, 200, u) }))
 	mux.HandleFunc("GET /api/vehicles", auth(a.listVehicles))
+	mux.HandleFunc("POST /api/vehicles", auth(a.addVehicle))
 
 	mux.HandleFunc("GET /api/chargers/search", auth(a.searchChargers))
 	mux.HandleFunc("GET /api/chargers/{id}", auth(a.getCharger))
@@ -39,10 +40,27 @@ func (a *App) routes() http.Handler {
 
 	mux.HandleFunc("GET /api/owner/chargers", auth(a.ownerChargers))
 	mux.HandleFunc("GET /api/owner/bookings", auth(a.ownerBookings))
+	mux.HandleFunc("POST /api/owner/chargers", auth(a.createCharger))
 
-	mux.Handle("/api/agent/", a.agentProxy())
+	mux.HandleFunc("POST /api/reports", auth(a.createReport))
 
-	return logRequests(cors(a.cfg.CORSOrigins, mux))
+	mux.HandleFunc("GET /api/admin/stats", auth(adminOnly(a.adminStats)))
+	mux.HandleFunc("GET /api/admin/chargers", auth(adminOnly(a.adminChargers)))
+	mux.HandleFunc("POST /api/admin/chargers/{id}/{decision}", auth(adminOnly(a.reviewCharger)))
+	mux.HandleFunc("GET /api/admin/reports", auth(adminOnly(a.adminReports)))
+	mux.HandleFunc("POST /api/admin/reports/{id}/resolve", auth(adminOnly(a.resolveReport)))
+	mux.HandleFunc("GET /api/admin/risk", auth(adminOnly(a.adminRisk)))
+
+	mux.HandleFunc("POST /api/agent/chat", auth(a.agentChat))
+	mux.HandleFunc("POST /api/agent/confirm", auth(a.agentConfirm))
+
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, 404, "NOT_FOUND", "No such endpoint")
+	})
+	mux.Handle("/", spa(a.cfg.StaticDir))
+
+	a.handler = logRequests(cors(a.cfg.CORSOrigins, mux))
+	return a.handler
 }
 
 // ---- auth: signed token "base64(userID).base64(hmac)". Demo login, no passwords (prototype). ----
@@ -90,7 +108,7 @@ func (a *App) withUser(h func(http.ResponseWriter, *http.Request, *User)) http.H
 }
 
 func (a *App) demoUsers(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.Query(`SELECT id FROM users ORDER BY email`)
+	rows, err := a.db.Query(`SELECT id FROM users ORDER BY CASE WHEN roles LIKE 'driver%' THEN 0 WHEN roles LIKE 'owner%' THEN 1 ELSE 2 END, rowid`)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -134,27 +152,22 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"access_token": a.sign(id), "user": u})
 }
 
-// ---- agent proxy: P3's Python service lives behind /api/agent/* so the frontend uses one base URL ----
+// ---- frontend: serve the built React app (frontend/dist) with SPA fallback to index.html ----
 
-func (a *App) agentProxy() http.Handler {
-	target, err := url.Parse(a.cfg.AgentURL)
-	if err != nil {
-		log.Fatalf("bad AGENT_URL: %v", err)
-	}
-	p := httputil.NewSingleHostReverseProxy(target)
-	p.ModifyResponse = func(res *http.Response) error {
-		for k := range res.Header {
-			if strings.HasPrefix(k, "Access-Control-") {
-				res.Header.Del(k) // CORS is handled here, not by the agent
+func spa(dir string) http.Handler {
+	files := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := os.Stat(filepath.Join(dir, filepath.Clean("/"+r.URL.Path))); err != nil {
+			index := filepath.Join(dir, "index.html")
+			if _, err := os.Stat(index); err != nil {
+				http.Error(w, "Frontend not built. Run: cd frontend && npm run build", 404)
+				return
 			}
+			http.ServeFile(w, r, index)
+			return
 		}
-		return nil
-	}
-	p.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("agent proxy: %v", err)
-		writeError(w, 502, "AGENT_UNAVAILABLE", "The AI assistant is not running right now")
-	}
-	return p
+		files.ServeHTTP(w, r)
+	})
 }
 
 // ---- helpers ----

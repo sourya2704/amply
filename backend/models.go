@@ -134,15 +134,15 @@ type scheduleRule struct {
 
 type charger struct {
 	ID, Name, Category, Address, ApproxArea, Connector, Mode string
-	OwnerID, OwnerName, PhotoURL                            *string
-	Lat, Lng, PowerKW, Rating                               float64
-	PricePerKWhPaise                                        int64
-	Description, AccessInstructions, Status, AvailSource    string
-	Amenities                                               []string
-	Bookable                                                bool
-	LastUpdated                                             time.Time
-	ReviewCount                                             int
-	Schedule                                                []scheduleRule
+	OwnerID, OwnerName, PhotoURL                             *string
+	Lat, Lng, PowerKW, Rating                                float64
+	PricePerKWhPaise                                         int64
+	Description, AccessInstructions, Status, AvailSource     string
+	Amenities                                                []string
+	Bookable                                                 bool
+	LastUpdated                                              time.Time
+	ReviewCount                                              int
+	Schedule                                                 []scheduleRule
 }
 
 const chargerCols = `c.id, c.owner_id, u.name, c.name, c.category, c.lat, c.lng, c.address, c.approx_area, c.connector, c.mode,
@@ -276,3 +276,5 @@ func (a *App) detail(c *charger, v *Vehicle, from *[2]float64, reveal bool) Char
 }
 
 func hhmm(min int) string { return fmt.Sprintf("%02d:%02d", min/60, min%60) }
+
+func formatTS(ts int64) string { return time.Unix(ts, 0).In(IST).Format(time.RFC3339) }

@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS chargers (
 	availability_source TEXT NOT NULL,
 	last_updated_at INTEGER NOT NULL,
 	rating REAL NOT NULL DEFAULT 0,
-	review_count INTEGER NOT NULL DEFAULT 0
+	review_count INTEGER NOT NULL DEFAULT 0,
+	review_note TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS schedules (
 	charger_id TEXT NOT NULL REFERENCES chargers(id),
@@ -100,6 +101,16 @@ CREATE TABLE IF NOT EXISTS booking_events (
 	metadata TEXT NOT NULL DEFAULT '{}',
 	created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS reports (
+	id TEXT PRIMARY KEY,
+	reporter_id TEXT NOT NULL REFERENCES users(id),
+	target_type TEXT NOT NULL,        -- charger | user | booking
+	target_id TEXT NOT NULL,
+	reason TEXT NOT NULL,
+	status TEXT NOT NULL,             -- open | resolved
+	resolution TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS payments (
 	id TEXT PRIMARY KEY,
 	booking_id TEXT NOT NULL REFERENCES bookings(id),
@@ -116,7 +127,7 @@ func migrate(db *sql.DB) error {
 }
 
 func resetDB(db *sql.DB) error {
-	for _, t := range []string{"payments", "booking_events", "bookings", "schedules", "chargers", "vehicles", "users"} {
+	for _, t := range []string{"reports", "payments", "booking_events", "bookings", "schedules", "chargers", "vehicles", "users"} {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + t); err != nil {
 			return err
 		}
@@ -258,20 +269,30 @@ func seed(db *sql.DB, dir string) error {
 			c.AvailabilitySource, updated, c.Rating, c.ReviewCount); err != nil {
 			return fmt.Errorf("charger %q: %w", c.Name, err)
 		}
-		for _, s := range c.Schedule {
-			start, err1 := parseHHMM(s.StartTime)
-			end, err2 := parseHHMM(s.EndTime)
-			if err1 != nil || err2 != nil || end <= start {
-				return fmt.Errorf("charger %q: bad schedule %s-%s", c.Name, s.StartTime, s.EndTime)
-			}
-			for _, wd := range s.Weekdays {
-				if _, err := tx.Exec(`INSERT INTO schedules (charger_id, weekday, start_min, end_min) VALUES (?,?,?,?)`, id, wd, start, end); err != nil {
-					return err
-				}
-			}
+		if err := insertSchedules(tx, id, c.Schedule); err != nil {
+			return fmt.Errorf("charger %q: %w", c.Name, err)
 		}
 	}
 	return tx.Commit()
+}
+
+func insertSchedules(tx *sql.Tx, chargerID string, schedule []seedSchedule) error {
+	for _, s := range schedule {
+		start, err1 := parseHHMM(s.StartTime)
+		end, err2 := parseHHMM(s.EndTime)
+		if err1 != nil || err2 != nil || end <= start {
+			return fmt.Errorf("bad schedule %s-%s", s.StartTime, s.EndTime)
+		}
+		for _, wd := range s.Weekdays {
+			if wd < 0 || wd > 6 {
+				return fmt.Errorf("bad weekday %d", wd)
+			}
+			if _, err := tx.Exec(`INSERT INTO schedules (charger_id, weekday, start_min, end_min) VALUES (?,?,?,?)`, chargerID, wd, start, end); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // parseHHMM turns "08:00" into minutes after midnight; "24:00" is allowed as end of day.

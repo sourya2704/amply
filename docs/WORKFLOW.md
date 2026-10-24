@@ -1,74 +1,52 @@
-# Amply — Hackathon Workflow (Prototype)
+# Amply — Team Guide (Prototype)
 
-**We are submitting a prototype:** one convincing, working flow, not the full PRD. Fake the hard parts (payments, login,
-real charger data). Make the core idea work for real.
-
-> **Demo story:** Driver (Tata Nexon EV) asks the AI *"Find a compatible charger near Koramangala under ₹20/kWh and
-> book it for 6 PM"* → the AI searches real backend data, hides incompatible chargers, explains its pick, and shows a
-> **Confirm** card → owner accepts on their dashboard → driver pays (mock) → address revealed → session completed.
->
-> **Judge moments:** (1) two drivers book the same slot → one gets "slot taken"; (2) honest badges
-> (Live / Schedule / Reported / Stale / Unknown); (3) the AI hides incompatible chargers, ignores a malicious listing,
-> and can't book without your click.
+The prototype is **built and working end to end**. What's left for the team is to run it, test it, polish it, and
+win the pitch.
 
 ## Submission checklist
-- [ ] GitHub repo with README ✅
-- [ ] Working prototype (live link or run locally at judging)
-- [ ] 2–3 min demo video (also our backup if the Wi-Fi dies)
-- [ ] Pitch deck (6–7 slides)
+- [x] GitHub repo with README
+- [x] Working prototype (backend, frontend, AI assistant, admin)
+- [ ] Deployed link (optional, see below), or run it on a laptop at judging
+- [ ] 2–3 min demo video, following [demo-script.md](demo-script.md)
+- [ ] Pitch deck, built from [../pitch/pitch-outline.md](../pitch/pitch-outline.md)
 
----
-
-## 1. Who does what
-
-| | Person | Owns (only they edit these) | Brief for their AI |
-|---|---|---|---|
-| **P1** | Shourya | `backend/` except `backend/seed/` · `docs/api-contract.md` | `ai-briefs/P1-backend.md` |
-| **P2** | Frontend | `frontend/` except `frontend/src/components/agent/` | `ai-briefs/P2-frontend.md` |
-| **P3** | AI | `agent/` (Python service) · `frontend/src/components/agent/` | `ai-briefs/P3-ai-agent.md` |
-| **P4** | Product | `backend/seed/` · `docs/demo-script.md` · `pitch/` · demo video | `ai-briefs/P4-product-pitch.md` |
-
-**Start your AI with:** `Read docs/WORKFLOW.md, docs/api-contract.md and docs/ai-briefs/<your file>. Start with step 1.`
-
-## 2. Architecture
-
+## Run it (one laptop, one command after the build)
+```bash
+cd frontend && npm install && npm run build      # builds the web app into frontend/dist
+cd ../backend && go run . -reset                  # serves API + web app on http://localhost:8000, fresh demo data
 ```
-React app (P2, :5173) ──▶ Go API (P1, :8000) ──▶ SQLite file
-                               │
-                               └─ /api/agent/* ──▶ Python agent (P3, :8001) ──▶ Claude API
-                                                         │
-                                                         └─ calls the Go API back with the user's token
-```
-The frontend only knows **one URL** (the Go API). The agent never touches the database. It uses the same API
-the frontend does, so it gets exactly the user's permissions.
+Teammates on the same Wi-Fi can open `http://<that-laptop-IP>:8000`.
 
-## 3. Timeline (H0 = start)
+**Turn on the real AI:** put `ANTHROPIC_API_KEY=...` in `backend/.env` (copy `.env.example`; never commit it) and
+restart. Without a key the assistant runs in a clearly labelled offline mode that uses the same tools, so the demo
+still works if the key or Wi-Fi fails.
 
-| Time | P1 Backend | P2 Frontend | P3 AI | P4 Product |
-|---|---|---|---|---|
-| **H0–H1** | ✅ API done + tested. Share LAN URL | Scaffold, router, api client, login picker | Agent service skeleton, Claude key working | Expand seed data, outline deck |
-| **H1–H4** | Support team, fix contract gaps, deploy | Map search + charger detail + slot booking | Tools + loop + `/chat` + `/confirm` | Demo script, deck draft |
-| **H4** ✅ | **Checkpoint 1:** booking works from the UI. Agent answers a search question. | | | |
-| **H4–H7** | Bugs, deploy | My bookings, owner dashboard, mock pay | Chat panel UI + confirm card, guardrail tests | Test every flow, report bugs |
-| **H7** ✅ | **Checkpoint 2:** the full demo story works end to end. | | | |
-| **H7–H9** | Deploy + reseed | Polish (brand, mobile, empty states) | Prompt tuning | Rehearse, finish deck |
-| **H9** 🧊 | **Feature freeze.** Bug fixes only. | | | |
-| **H9–H12** | Reseed DB before judging | Bugs | Bugs | **Record the demo video**, final rehearsal |
+**Frontend dev with hot reload:** keep the backend running, then `cd frontend && npm run dev` → http://localhost:5173.
 
-## 4. Git
-- `main` must always run. Work on `be/…`, `fe/…`, `ai/…`, `pm/…` branches; merge at least every 2 hours.
-- `git pull --rebase origin main` every hour. Never commit `.env`; share keys by DM.
+**Tests:** `cd backend && go test ./...` covers the booking loop, 10 simultaneous bookings for one slot (exactly one
+wins), the AI booking only after confirm, owner listing → admin approval, risk flags, and reports.
 
-## 5. Running locally
+## What's in the box
 
-| What | Command | URL |
+| Area | Where | What it does |
 |---|---|---|
-| Backend | `cd backend && go run .` (first run seeds; `go run . -reset` reseeds) | http://localhost:8000/api/health |
-| Agent | `cd agent && uvicorn main:app --port 8001 --reload` | via http://localhost:8000/api/agent/chat |
-| Frontend | `cd frontend && npm run dev` | http://localhost:5173 |
+| API + DB | `backend/*.go`, SQLite | Search with compatibility filter, honest availability, slots, pricing, booking state machine, mock payment, owner listings, admin review, reports, risk flags |
+| AI assistant | `backend/agent.go`, `frontend/src/components/AgentPanel.tsx` | Claude tool use over our own API, tool trace, charger cards, Confirm card. Offline fallback |
+| Web app | `frontend/src` | Login picker, map search, charger page + slot booking, bookings + timeline, owner dashboard + "list a charger", admin trust & safety |
+| Demo data | `backend/seed/*.json` | 25 Bengaluru chargers with planted demo cases (see demo script) |
 
-Teammates who aren't running the backend can point `VITE_API_URL` at `http://<P1-laptop-LAN-IP>:8000`
-(same Wi-Fi), or at the deployed URL.
+## Splitting the remaining work (suggested)
+| Person | Now |
+|---|---|
+| Shourya | Keep the server running for everyone; deploy if wanted; final bug fixes |
+| Frontend teammate | Click through every screen on laptop + phone width, fix any visual issues |
+| AI teammate | Add the API key, run the AI prompts in the demo script, tune `systemPrompt()` in `backend/agent.go` if needed |
+| Product teammate | Rehearse the demo script, build the deck from the outline, record the video |
 
-## 6. Chat prefixes
-`BLOCKED:` · `CONTRACT CHANGE:` · `MERGED:` · `BUG:` (with steps to reproduce, sent to the owner)
+Work on branches (`fix/...`), merge to `main` often, never commit `.env`.
+
+## Optional: deploy
+Any host that runs Go works (Render, Railway, Fly.io). Build command:
+`cd frontend && npm ci && npm run build && cd ../backend && go build -o amply .`. Start command:
+`cd backend && ./amply -reset`. Set `AUTH_SECRET` and optionally `ANTHROPIC_API_KEY` as environment variables.
+`-reset` reloads the demo data on every start, which is what you want for a demo.
