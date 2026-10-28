@@ -11,3 +11,4 @@ dist/
 *.db-shm
 *.db-wal
 /backend/amply
+*.tsbuildinfo
