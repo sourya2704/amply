@@ -9,7 +9,8 @@ interface AuthState {
   vehicle: Vehicle | null;
   setVehicleId: (id: string) => void;
   reloadVehicles: () => Promise<void>;
-  login: (email: string) => Promise<User>;
+  login: (email: string, password: string) => Promise<User>;
+  register: (name: string, email: string, password: string, roles: string[]) => Promise<User>;
   logout: () => void;
 }
 
@@ -59,13 +60,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string) => {
-    const res = await api.post<{ access_token: string; user: User }>("/api/auth/login", { email });
+  const start = async (res: { access_token: string; user: User }) => {
     setToken(res.access_token);
     setUser(res.user);
     await reloadVehicles();
     return res.user;
   };
+  const login = async (email: string, password: string) =>
+    start(await api.post<{ access_token: string; user: User }>("/api/auth/login", { email, password }));
+  const register = async (name: string, email: string, password: string, roles: string[]) =>
+    start(await api.post<{ access_token: string; user: User }>("/api/auth/register", { name, email, password, roles }));
 
   const logout = () => {
     setToken(null);
@@ -76,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const vehicle = vehicles.find((v) => v.id === vehicleId) ?? null;
 
   return (
-    <AuthContext.Provider value={{ user, loading, vehicles, vehicle, setVehicleId, reloadVehicles, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, vehicles, vehicle, setVehicleId, reloadVehicles, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

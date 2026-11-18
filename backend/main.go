@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"database/sql"
 	"flag"
 	"log"
 	"net/http"
@@ -18,21 +17,25 @@ var IST = time.FixedZone("IST", 5*3600+30*60)
 
 type Config struct {
 	Port        string
-	DBPath      string
+	DatabaseURL string
 	SeedDir     string
 	StaticDir   string
 	AgentModel  string
 	AuthSecret  string
 	CORSOrigins string
+	RouteURL    string // OSRM server; empty disables road routing (straight-line estimate)
+	DemoMode    bool   // one-click demo accounts on the login page
 }
 
 type App struct {
-	db      *sql.DB
-	cfg     Config
-	now     func() time.Time
-	handler http.Handler      // set by routes(); the agent calls the API through it in-process
-	llm     *anthropic.Client // nil → agent runs in offline mode
-	pending pendingStore
+	db          *DB
+	cfg         Config
+	now         func() time.Time
+	handler     http.Handler      // set by routes(); the agent calls the API through it in-process
+	llm         *anthropic.Client // nil → assistant runs in offline mode
+	pending     pendingStore
+	rzp         *razorpay
+	authLimiter *rateLimiter
 }
 
 func main() {
@@ -42,15 +45,20 @@ func main() {
 	loadDotEnv(".env")
 	cfg := Config{
 		Port:        env("PORT", "8000"),
-		DBPath:      env("DB_PATH", "amply.db"),
+		DatabaseURL: env("DATABASE_URL", "postgres://amply:amply@localhost:5433/amply?sslmode=disable"),
 		SeedDir:     env("SEED_DIR", "seed"),
 		StaticDir:   env("STATIC_DIR", "../frontend/dist"),
 		AgentModel:  env("AGENT_MODEL", "claude-opus-5-5"),
 		AuthSecret:  env("AUTH_SECRET", "dev-only-secret-change-me"),
 		CORSOrigins: env("CORS_ORIGINS", "*"),
+		RouteURL:    env("ROUTE_URL", "https://router.project-osrm.org"),
+		DemoMode:    env("DEMO_MODE", "true") == "true",
+	}
+	if cfg.AuthSecret == "dev-only-secret-change-me" {
+		log.Printf("WARNING: AUTH_SECRET is not set; using an insecure development secret")
 	}
 
-	db, err := openDB(cfg.DBPath)
+	db, err := openDB(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
@@ -71,14 +79,19 @@ func main() {
 		log.Printf("seeded database from %s/", cfg.SeedDir)
 	}
 
-	app := &App{db: db, cfg: cfg, now: time.Now}
-	mode := "offline mode (set ANTHROPIC_API_KEY for Claude)"
+	app := &App{db: db, cfg: cfg, now: time.Now, authLimiter: newRateLimiter(10),
+		rzp: newRazorpay(os.Getenv("RAZORPAY_KEY_ID"), os.Getenv("RAZORPAY_KEY_SECRET"))}
+	mode := "offline mode (set ANTHROPIC_API_KEY to enable the AI model)"
 	if os.Getenv("ANTHROPIC_API_KEY") != "" {
 		client := anthropic.NewClient()
 		app.llm = &client
-		mode = "Claude " + cfg.AgentModel
+		mode = "AI model " + cfg.AgentModel
 	}
-	log.Printf("Amply listening on http://localhost:%s, AI assistant: %s", cfg.Port, mode)
+	payments := "mock (set RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET for Razorpay test mode)"
+	if app.rzp.enabled() {
+		payments = "Razorpay"
+	}
+	log.Printf("Amply listening on http://localhost:%s · assistant: %s · payments: %s", cfg.Port, mode, payments)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, app.routes()))
 }
 

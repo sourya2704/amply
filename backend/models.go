@@ -80,6 +80,7 @@ type ChargerDetail struct {
 	Address            *string       `json:"address"`
 	AccessInstructions *string       `json:"access_instructions"`
 	Schedule           []ScheduleOut `json:"schedule"`
+	ReviewNote         string        `json:"review_note,omitempty"` // admin's note, shown to the owner
 }
 
 type PriceBreakdown struct {
@@ -124,6 +125,9 @@ type Booking struct {
 	AccessInstructions *string        `json:"access_instructions"`
 	Events             []BookingEvent `json:"events"`
 	CreatedAt          string         `json:"created_at"`
+	ExpiresAt          *string        `json:"expires_at"` // when an unanswered/unpaid hold lapses
+	Reviewed           bool           `json:"reviewed"`
+	HasOpenIssue       bool           `json:"has_open_issue"`
 }
 
 // ---- DB rows ----
@@ -138,6 +142,7 @@ type charger struct {
 	Lat, Lng, PowerKW, Rating                                float64
 	PricePerKWhPaise                                         int64
 	Description, AccessInstructions, Status, AvailSource     string
+	ReviewNote                                               string
 	Amenities                                                []string
 	Bookable                                                 bool
 	LastUpdated                                              time.Time
@@ -147,12 +152,7 @@ type charger struct {
 
 const chargerCols = `c.id, c.owner_id, u.name, c.name, c.category, c.lat, c.lng, c.address, c.approx_area, c.connector, c.mode,
 	c.power_kw, c.price_per_kwh_paise, c.description, c.access_instructions, c.amenities, c.photo_url, c.status, c.bookable,
-	c.availability_source, c.last_updated_at, c.rating, c.review_count`
-
-type querier interface {
-	Query(query string, args ...any) (*sql.Rows, error)
-	QueryRow(query string, args ...any) *sql.Row
-}
+	c.availability_source, c.last_updated_at, c.rating, c.review_count, c.review_note`
 
 func loadChargers(q querier, where string, args ...any) ([]*charger, error) {
 	rows, err := q.Query(`SELECT `+chargerCols+` FROM chargers c LEFT JOIN users u ON u.id = c.owner_id WHERE `+where, args...)
@@ -167,7 +167,7 @@ func loadChargers(q querier, where string, args ...any) ([]*charger, error) {
 		var updated int64
 		if err := rows.Scan(&c.ID, &c.OwnerID, &c.OwnerName, &c.Name, &c.Category, &c.Lat, &c.Lng, &c.Address, &c.ApproxArea,
 			&c.Connector, &c.Mode, &c.PowerKW, &c.PricePerKWhPaise, &c.Description, &c.AccessInstructions, &amen, &c.PhotoURL,
-			&c.Status, &c.Bookable, &c.AvailSource, &updated, &c.Rating, &c.ReviewCount); err != nil {
+			&c.Status, &c.Bookable, &c.AvailSource, &updated, &c.Rating, &c.ReviewCount, &c.ReviewNote); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -182,7 +182,11 @@ func loadChargers(q querier, where string, args ...any) ([]*charger, error) {
 		return out, err
 	}
 
-	srows, err := q.Query(`SELECT charger_id, weekday, start_min, end_min FROM schedules ORDER BY weekday, start_min`)
+	ids := make([]string, 0, len(out))
+	for _, c := range out {
+		ids = append(ids, c.ID)
+	}
+	srows, err := q.Query(`SELECT charger_id, weekday, start_min, end_min FROM schedules WHERE charger_id = ANY(?) ORDER BY weekday, start_min`, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +271,7 @@ func (a *App) detail(c *charger, v *Vehicle, from *[2]float64, reveal bool) Char
 		Status: c.Status, Schedule: []ScheduleOut{},
 	}
 	if reveal {
-		d.Address, d.AccessInstructions = &c.Address, &c.AccessInstructions
+		d.Address, d.AccessInstructions, d.ReviewNote = &c.Address, &c.AccessInstructions, c.ReviewNote
 	}
 	for _, r := range c.Schedule {
 		d.Schedule = append(d.Schedule, ScheduleOut{r.Weekday, hhmm(r.StartMin), hhmm(r.EndMin)})

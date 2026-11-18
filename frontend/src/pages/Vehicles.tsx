@@ -34,14 +34,14 @@ export default function Vehicles() {
         {vehicles.map((v) => (
           <Card key={v.id} className="flex items-center justify-between gap-3 p-4">
             <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-brand">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/15 text-primary-ink">
                 <Car size={20} />
               </span>
               <div>
                 <div className="font-semibold">
                   {v.make} {v.model}
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-muted">
                   {v.connectors.join(" / ")} · AC {v.max_ac_kw} kW · {v.max_dc_kw ? `DC ${v.max_dc_kw} kW` : "no DC fast charging"} · {v.battery_kwh} kWh
                 </div>
               </div>
@@ -61,11 +61,11 @@ export default function Vehicles() {
       <h2 className="mt-8 mb-3 font-semibold">Add an EV</h2>
       <div className="grid gap-2 sm:grid-cols-2">
         {PRESETS.map((p) => (
-          <button key={p.model} onClick={() => add(p)} className="rounded-xl bg-white p-3 text-left text-sm ring-1 ring-slate-200 hover:ring-brand">
+          <button key={p.model} onClick={() => add(p)} className="rounded-xl bg-surface p-3 text-left text-sm ring-1 ring-line hover:ring-primary">
             <b>
               {p.make} {p.model}
             </b>
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-muted">
               {p.connectors.join("/")} · {p.max_dc_kw ? `DC ${p.max_dc_kw} kW` : "AC only"}
             </div>
           </button>

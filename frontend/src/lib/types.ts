@@ -5,7 +5,7 @@ export type Connector = "CCS2" | "TYPE2" | "CHADEMO" | "GBT";
 export type Mode = "AC" | "DC";
 export type AvailabilitySource = "live" | "schedule" | "reported" | "stale" | "unknown";
 export type Compatibility = "compatible" | "incompatible" | "unknown";
-export type BookingStatus = "requested" | "accepted" | "confirmed" | "completed" | "rejected" | "cancelled";
+export type BookingStatus = "requested" | "accepted" | "confirmed" | "in_progress" | "completed" | "rejected" | "cancelled" | "expired";
 
 export interface User {
   id: string;
@@ -63,10 +63,11 @@ export interface ChargerDetail extends ChargerSummary {
   owner_name: string | null;
   amenities: string[];
   photo_url: string | null;
-  status: "approved" | "submitted" | "rejected";
+  status: "approved" | "submitted" | "rejected" | "paused";
   address: string | null;
   access_instructions: string | null;
   schedule: ScheduleRule[];
+  review_note?: string;
 }
 
 export interface PriceBreakdown {
@@ -100,11 +101,14 @@ export interface Booking {
   start_at: string;
   end_at: string;
   price: PriceBreakdown;
-  payment_status: "none" | "paid";
+  payment_status: "none" | "paid" | "refunded";
   address: string | null;
   access_instructions: string | null;
   events: BookingEvent[];
   created_at: string;
+  expires_at: string | null;
+  reviewed: boolean;
+  has_open_issue: boolean;
 }
 
 export interface ToolTrace {
@@ -152,8 +156,66 @@ export interface Report {
   target_type: string;
   target_id: string;
   target_label: string;
+  category: string;
   reason: string;
   status: "open" | "resolved";
   resolution: string;
   created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  link: string;
+  read: boolean;
+  created_at: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  actor_name: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface RoutePlan {
+  distance_km: number;
+  duration_min: number;
+  polyline: [number, number][];
+  estimated_range_km: number | null;
+  needs_charge: boolean | null;
+  suggested_stops: ChargerSummary[];
+  assumptions: string[];
+  source: "osrm" | "estimate";
+}
+
+export interface Payout {
+  id: string;
+  booking_id: string;
+  charger_name: string;
+  amount_paise: number;
+  status: "pending" | "paid";
+  created_at: string;
+}
+
+export interface Review {
+  rating: number;
+  comment: string;
+  author_name: string;
+  created_at: string;
+}
+
+export interface PaymentOrder {
+  provider: "razorpay" | "mock";
+  order_id: string;
+  key_id?: string;
+  amount_paise: number;
+  currency: string;
+  name: string;
+  description: string;
 }

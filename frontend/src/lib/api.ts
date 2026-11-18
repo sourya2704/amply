@@ -52,6 +52,7 @@ async function request<T>(method: string, path: string, body?: unknown, headers:
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown, headers?: Record<string, string>) => request<T>("POST", path, body ?? {}, headers),
+  patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
 };
 
 export function qs(params: Record<string, string | number | boolean | undefined | null>) {

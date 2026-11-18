@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
-import { LogOut, Zap } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { AuthProvider, useAuth } from "./lib/auth";
 import type { Role } from "./lib/types";
 import { Spinner } from "./components/ui";
@@ -11,24 +11,25 @@ import { BookingDetail, BookingList } from "./pages/Bookings";
 import Owner, { NewCharger } from "./pages/Owner";
 import Admin from "./pages/Admin";
 import Vehicles from "./pages/Vehicles";
+import Trip from "./pages/Trip";
+import { NotificationBell } from "./components/NotificationBell";
+import Info from "./pages/Info";
+import { Wordmark } from "./components/Logo";
 
 function Nav() {
   const { user, logout } = useAuth();
   if (!user) return null;
   const has = (r: Role) => user.roles.includes(r);
   const links: [string, string][] = [
-    ...(has("driver") ? ([["/", "Find chargers"], ["/bookings", "My bookings"]] as [string, string][]) : []),
+    ...(has("driver") ? ([["/", "Find chargers"], ["/trip", "Plan a trip"], ["/bookings", "My bookings"]] as [string, string][]) : []),
     ...(has("owner") ? ([["/owner", "Owner"]] as [string, string][]) : []),
     ...(has("admin") ? ([["/admin", "Trust & safety"]] as [string, string][]) : []),
   ];
   return (
-    <header className="sticky top-0 z-[1100] flex h-16 items-center justify-between gap-4 bg-navy px-4 text-white sm:px-6">
+    <header className="sticky top-0 z-[1100] flex h-16 items-center justify-between gap-4 border-b border-line bg-surface px-4 sm:px-6">
       <div className="flex min-w-0 items-center gap-6">
-        <NavLink to={homeFor(user)} className="flex items-center gap-2 text-lg font-extrabold">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-volt text-navy">
-            <Zap size={18} fill="currentColor" />
-          </span>
-          <span className="hidden sm:inline">Amply</span>
+        <NavLink to={homeFor(user)} aria-label="Amply home">
+          <Wordmark size={36} compact />
         </NavLink>
         <nav className="flex gap-1 overflow-x-auto">
           {links.map(([to, label]) => (
@@ -36,7 +37,9 @@ function Nav() {
               key={to}
               to={to}
               end={to === "/"}
-              className={({ isActive }) => `rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap ${isActive ? "bg-white/15 text-white" : "text-slate-300 hover:text-white"}`}
+              className={({ isActive }) =>
+                `rounded-full px-4 py-2 text-sm font-bold whitespace-nowrap transition ${isActive ? "bg-primary text-ink" : "text-muted-2 hover:bg-surface-3 hover:text-ink"}`
+              }
             >
               {label}
             </NavLink>
@@ -44,8 +47,9 @@ function Nav() {
         </nav>
       </div>
       <div className="flex items-center gap-3">
-        <span className="hidden text-sm text-slate-300 md:inline">{user.name}</span>
-        <button onClick={logout} className="rounded-lg p-2 text-slate-300 hover:bg-white/10 hover:text-white" aria-label="Log out" title="Log out">
+        <NotificationBell />
+        <span className="hidden items-center gap-2 text-sm font-semibold md:flex"><span className="grid h-8 w-8 place-items-center rounded-full bg-primary-soft text-xs font-extrabold text-primary-ink">{user.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span>{user.name}</span>
+        <button onClick={logout} className="rounded-full p-2 text-muted-2 hover:bg-surface-3 hover:text-ink" aria-label="Log out" title="Log out">
           <LogOut size={18} />
         </button>
       </div>
@@ -74,9 +78,11 @@ export default function App() {
         <Nav />
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
+          <Route path="/info/:topic" element={<Info />} />
           <Route path="/" element={<Guard role="driver"><Search /></Guard>} />
           <Route path="/chargers/:id" element={<Guard><ChargerDetail /></Guard>} />
           <Route path="/vehicles" element={<Guard role="driver"><Vehicles /></Guard>} />
+          <Route path="/trip" element={<Guard role="driver"><Trip /></Guard>} />
           <Route path="/bookings" element={<Guard role="driver"><BookingList /></Guard>} />
           <Route path="/bookings/:id" element={<Guard><BookingDetail /></Guard>} />
           <Route path="/owner" element={<Guard role="owner"><Owner /></Guard>} />

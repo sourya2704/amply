@@ -22,28 +22,32 @@ export function todayIST(offsetDays = 0) {
 
 export const availabilityStyle: Record<AvailabilitySource, { dot: string; chip: string; pin: string }> = {
   live: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200", pin: "#10b981" },
-  schedule: { dot: "bg-brand", chip: "bg-blue-50 text-brand ring-blue-200", pin: "#315CFF" },
-  reported: { dot: "bg-cyan", chip: "bg-cyan-50 text-cyan-800 ring-cyan-200", pin: "#19C6D2" },
-  stale: { dot: "bg-amber-500", chip: "bg-amber-50 text-amber-800 ring-amber-200", pin: "#f59e0b" },
-  unknown: { dot: "bg-slate-400", chip: "bg-slate-100 text-slate-600 ring-slate-200", pin: "#94a3b8" },
+  schedule: { dot: "bg-primary-dark", chip: "bg-primary-soft text-primary-ink ring-primary/60", pin: "#ff7ab8" },
+  reported: { dot: "bg-cyan", chip: "bg-cyan-50 text-cyan-700 ring-cyan-200", pin: "#19C6D2" },
+  stale: { dot: "bg-amber-500", chip: "bg-amber-50 text-amber-700 ring-amber-200", pin: "#f59e0b" },
+  unknown: { dot: "bg-faint", chip: "bg-surface-3 text-muted-2 ring-line", pin: "#a3a3a3" },
 };
 
 export const statusStyle: Record<BookingStatus, string> = {
-  requested: "bg-amber-50 text-amber-800 ring-amber-200",
-  accepted: "bg-blue-50 text-brand ring-blue-200",
+  requested: "bg-amber-50 text-amber-700 ring-amber-200",
+  accepted: "bg-primary-soft text-primary-ink ring-primary/60",
   confirmed: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  completed: "bg-slate-800 text-white ring-slate-800",
+  in_progress: "bg-cyan-50 text-cyan-700 ring-cyan-200",
+  completed: "bg-ink text-white ring-ink",
   rejected: "bg-rose-50 text-rose-700 ring-rose-200",
-  cancelled: "bg-slate-100 text-slate-500 ring-slate-200",
+  cancelled: "bg-surface-3 text-muted ring-line",
+  expired: "bg-surface-3 text-muted ring-line",
 };
 
 export const statusLabel: Record<BookingStatus, string> = {
   requested: "Waiting for owner",
-  accepted: "Accepted · pay to confirm",
+  accepted: "bg-primary-soft text-primary-ink ring-primary/60",
   confirmed: "Confirmed",
-  completed: "Completed",
+  in_progress: "Charging now",
+  completed: "bg-ink text-white ring-ink",
   rejected: "Declined",
   cancelled: "Cancelled",
+  expired: "Expired",
 };
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

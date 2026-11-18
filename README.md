@@ -34,66 +34,66 @@ Amply combines three layers:
 | **Admin** | Verification, disputes, risk review | Run a trustworthy, auditable marketplace |
 
 ## Key features
-- **Accounts and roles:** one user can be both driver and owner; permissions are enforced server-side.
+- **Accounts and roles:** sign-up and login with hashed passwords and expiring tokens; one person can be both driver and owner. Every action is checked server-side.
 - **Vehicle profiles:** make/model, connectors, AC/DC power limits. Missing specs are treated as *unknown*, never assumed.
-- **Charger listings:** owners submit a charger → admin approves or rejects → it goes live. Private addresses stay hidden until a booking is paid.
-- **Nearby search:** map search filtered by connector, mode, power, price, distance, and bookability (PostGIS planned for scale).
-- **Honest availability:** every charger is labelled *Live*, *Schedule-based*, *Reported*, *Stale*, or *Unknown*.
-- **Booking:** slot-based reservations with owner approval. Double booking is blocked by serialized database transactions, and every state change is logged in a timeline.
-- **Payments:** mock checkout in the prototype (Razorpay planned), with transparent fees and idempotent booking requests.
-- **Trust and safety:** listing verification, user reports with recorded outcomes, and rule-based risk flags (duplicates, price outliers, report and cancellation spikes) for human review.
+- **Geospatial search:** PostGIS finds chargers near you, and incompatible chargers are hidden (the count is shown).
+- **Honest availability:** every charger is labelled *Live*, *Owner schedule*, *Reported*, *Stale*, or *Unconfirmed*.
+- **Booking:** hourly slots with owner approval. A PostgreSQL exclusion constraint makes double booking impossible, requests that nobody answers expire, and every change is recorded in a timeline.
+- **Payments:** Razorpay test mode (orders, signature verification, refunds on cancellation), with a labelled mock fallback. Owners' earnings are tracked as payouts.
+- **Charger listings:** owners submit → admins verify → live, with edit, pause and resume. Home addresses stay hidden until a driver has paid.
+- **Trip planning:** road routes (OSRM) with a range estimate and compatible chargers along the way, found with PostGIS.
+- **Reviews, notifications, support:** reviews after completed sessions, in-app notifications, and support cases on bookings.
+- **Trust and safety:** listing verification, reports and support cases with recorded outcomes, risk flags (duplicate listings, price outliers, report and cancellation spikes) for human review, and a full audit log.
 
 ### Booking lifecycle
 ```
 Requested ─accept→ Accepted ─pay→ Confirmed ─start→ In Progress ─complete→ Completed
     │                 │               │
-    └─reject/expire───┴──cancel───────┘  → Rejected / Expired / Cancelled
+    └─reject/expire───┴──cancel (refund if paid)──┘  → Rejected / Expired / Cancelled
 ```
 
-## AI agents
-The AI is a **decision-support layer**, not a chatbot that makes things up. Agents call backend tools for every fact;
-the language model only interprets requests and explains results.
+## AI assistant
+The AI is a **decision-support layer**, not a chatbot that makes things up. It calls the same API as the app, using
+the signed-in user's permissions, for every fact; the language model only interprets requests and explains results.
 
-| Agent | Role |
+| PRD agent role | How it works in Amply |
 |---|---|
-| **Orchestrator** | Understands the request, asks for missing info, picks tools, combines answers |
-| **Discovery & Recommendation** | Applies hard compatibility filters, then ranks by distance, price, speed, and availability confidence |
-| **Route & Range Planning** | Suggests charging stops along a route, with assumptions and uncertainty stated |
-| **Booking Assistant** | Prepares a booking summary. **Nothing is booked without the user's explicit confirmation** |
-| **Trust & Risk Triage** | Flags suspicious listings or behaviour with evidence, for human review only |
-| **Support & Disputes** | Collects booking context and prepares a structured case for review |
+| **Orchestrator** | One assistant that understands the request, asks for missing info, and picks tools |
+| **Discovery & Recommendation** | `search_chargers` (compatibility already enforced), `get_charger`, `estimate_cost` |
+| **Route & Range Planning** | `plan_route`: distance, time, range estimate and chargers along the route, with stated assumptions |
+| **Booking Assistant** | `get_slots` + `prepare_booking`. **Nothing is booked until the user presses Confirm** |
+| **Support & Disputes** | `open_support_case` on a booking, resolved by an admin |
+| **Trust & Risk Triage** | Rule-based risk flags with evidence in the admin dashboard; humans decide |
 
 **AI safety rules:** the AI never invents station status, energy delivered, or approvals. It never overrides
-compatibility, booking, or payment rules. It treats listing text and reviews as untrusted input.
+compatibility, booking, or payment rules, and treats listing text and reviews as untrusted input. If no AI model is
+configured, a clearly labelled offline planner uses the same tools.
 
 ## Tech stack
 | Layer | Technology |
 |---|---|
 | Web app | React, Vite, TypeScript, Tailwind CSS, Leaflet (OpenStreetMap) |
-| API | Go (standard library `net/http`) |
-| Database | SQLite (prototype) → PostgreSQL + PostGIS for production |
-| AI | Claude API tool use (Anthropic Go SDK), built into the Go server |
-| Maps | OpenStreetMap (Leaflet) |
-| Payments | Mock payment (prototype) → Razorpay later |
+| API | Go (standard library `net/http`), bcrypt, HMAC-signed tokens |
+| Database | PostgreSQL + PostGIS (geography columns, GiST indexes, exclusion constraint) |
+| AI | LLM with tool calling, built into the Go server |
+| Routing | OSRM road routing + PostGIS corridor search |
+| Payments | Razorpay (test mode) |
 
 ```
 React web app
       │
-Go API ── auth · roles
-      ├── Marketplace services: users · vehicles · chargers · availability · search · bookings · payments · reviews · admin
-      ├── AI assistant ──▶ Claude tool use, calling the same API with the user's permissions
-      └── Integrations: maps/routing · payments
+Go API ── auth · roles · rate limits · audit log
+      ├── Marketplace: users · vehicles · chargers · availability · bookings · payments · payouts · reviews · notifications
+      ├── AI assistant ──▶ LLM tool calling over the same API, with the user's permissions
+      ├── Trust & safety: verification · reports & support cases · risk flags
+      └── Integrations: OSRM routing · Razorpay
       │
-SQLite · booking event history
+PostgreSQL + PostGIS
 ```
 
-## Prototype scope
-**Built:** demo login with roles, vehicle profiles, owner listing + admin verification, map search, compatibility
-filtering, honest availability labels, slot booking with owner approval, mock payment, AI assistant (search, explain,
-book with confirmation), rule-based risk flags, user reports, and admin tools.
-
-**Not yet:** real sign-up and payments (Razorpay), route planning, reviews, notifications, live operator data,
-smart-charger control, and the separate risk/support AI agents described above.
+## Not yet built
+Live operator data and station integrations, smart-charger control and metered energy, native mobile apps, SMS/email
+notifications, automated owner payouts (tracked, settled manually), and multilingual chat.
 
 ## Business model (hypotheses to validate)
 - Transparent service fee on eligible bookings
@@ -114,12 +114,18 @@ smart-charger control, and the separate risk/support AI agents described above.
 
 *Amply is a working name; trademark and domain availability are still to be confirmed.*
 
-## Run the prototype
+## Run it locally
 ```bash
+docker compose up -d db                              # Postgres + PostGIS on localhost:5433
 cd frontend && npm install && npm run build
-cd ../backend && go run . -reset        # http://localhost:8000
+cd ../backend && cp .env.example .env && go run . -reset   # http://localhost:8000
 ```
-Log in with one of the demo accounts on the login page. Optional: add `ANTHROPIC_API_KEY` to `backend/.env` for the
-Claude-powered assistant (without it, a labelled offline planner is used). Tests: `cd backend && go test ./...`.
+Log in with a demo account on the login page (password `demo1234`), or create your own account. Optional keys in
+`backend/.env`: `ANTHROPIC_API_KEY` for the AI model, `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` (test mode) for payments.
+
+Tests (need the database running):
+```bash
+cd backend && TEST_DATABASE_URL="postgres://amply:amply@localhost:5433/amply_test?sslmode=disable" go test ./...
+```
 
 Docs: [team guide](docs/WORKFLOW.md) · [API contract](docs/api-contract.md) · [demo script](docs/demo-script.md) · [pitch outline](pitch/pitch-outline.md)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -142,19 +143,42 @@ func fitsSchedule(start, end time.Time, rules []scheduleRule) bool {
 }
 
 // ---- booking state machine ----
+//
+//   requested ──accept──▶ accepted ──payment verified──▶ confirmed ──start──▶ in_progress ──complete──▶ completed
+//   requested ──reject──▶ rejected        requested/accepted ──no response/payment in time──▶ expired
+//   requested/accepted/confirmed ──driver cancel──▶ cancelled (refund if paid)
 
-// Statuses that hold a charger's time slot.
-var blockingStatuses = []string{"requested", "accepted", "confirmed"}
+// Statuses that hold a charger's time slot (mirrors the bookings_no_overlap constraint).
+var blockingStatuses = []string{"requested", "accepted", "confirmed", "in_progress"}
 
-var transitions = map[string]struct {
+// Unanswered requests and unpaid acceptances release the slot after this long.
+const holdTimeout = 30 * time.Minute
+
+type transition struct {
 	from []string
 	to   string
-}{
+}
+
+// Payment (accepted → confirmed) happens in payments.go after the provider verifies it.
+var transitions = map[string]transition{
 	"accept":   {[]string{"requested"}, "accepted"},
 	"reject":   {[]string{"requested"}, "rejected"},
 	"cancel":   {[]string{"requested", "accepted", "confirmed"}, "cancelled"},
-	"pay":      {[]string{"accepted"}, "confirmed"},
-	"complete": {[]string{"confirmed"}, "completed"},
+	"start":    {[]string{"confirmed"}, "in_progress"},
+	"complete": {[]string{"confirmed", "in_progress"}, "completed"},
 }
 
-func revealsAddress(status string) bool { return status == "confirmed" || status == "completed" }
+func revealsAddress(status string) bool {
+	return status == "confirmed" || status == "in_progress" || status == "completed"
+}
+
+// placeholders returns "?,?,?" for n values.
+func placeholders(n int) string { return strings.TrimSuffix(strings.Repeat("?,", n), ",") }
+
+func anySlice[T any](xs []T) []any {
+	out := make([]any, len(xs))
+	for i, x := range xs {
+		out[i] = x
+	}
+	return out
+}

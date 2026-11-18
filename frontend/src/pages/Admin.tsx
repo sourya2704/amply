@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { AlertTriangle, Check, Flag, ShieldAlert, X } from "lucide-react";
+import { AlertTriangle, Check, Flag, History, ShieldAlert, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/auth";
 import { formatDateTime, formatINR } from "../lib/format";
-import type { ChargerDetail, Report, RiskFlag } from "../lib/types";
+import type { AuditEntry, ChargerDetail, Report, RiskFlag } from "../lib/types";
 import { MapView } from "../components/MapView";
 import { Button, Card, Empty, ErrorNote, PageHeader, Spinner } from "../components/ui";
 
@@ -12,6 +12,7 @@ export default function Admin() {
   const queue = useFetch(() => api.get<ChargerDetail[]>("/api/admin/chargers?status=submitted"), [], 5000);
   const risk = useFetch(() => api.get<RiskFlag[]>("/api/admin/risk"), [], 10000);
   const reports = useFetch(() => api.get<Report[]>("/api/admin/reports"), [], 5000);
+  const auditLog = useFetch(() => api.get<AuditEntry[]>("/api/admin/audit-logs?limit=40"), [], 8000);
   const [err, setErr] = useState<string | null>(null);
 
   const run = async (fn: () => Promise<unknown>, after: () => void) => {
@@ -39,17 +40,22 @@ export default function Admin() {
   return (
     <div className="mx-auto max-w-6xl p-4 sm:p-6">
       <PageHeader title="Trust & safety" subtitle="Verify listings, review risk flags and resolve reports. Humans decide; nothing is enforced automatically." />
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           ["Live chargers", "chargers_live"],
           ["Pending review", "pending_listings"],
+          ["Users", "users"],
           ["Bookings", "bookings_total"],
           ["Completed sessions", "completed_sessions"],
-          ["Open reports", "open_reports"],
+          ["Open cases", "open_reports"],
+          ["Payments collected", "gmv_paise"],
+          ["Platform fees earned", "platform_fee_paise"],
         ].map(([label, key]) => (
           <Card key={key} className="p-4">
-            <div className="text-xs text-slate-500">{label}</div>
-            <div className="mt-1 text-2xl font-bold">{stats.data?.[key] ?? "–"}</div>
+            <div className="text-xs text-muted">{label}</div>
+            <div className="mt-1 text-2xl font-bold">
+              {stats.data ? (key.endsWith("_paise") ? formatINR(stats.data[key]) : stats.data[key]) : "–"}
+            </div>
           </Card>
         ))}
       </div>
@@ -57,7 +63,7 @@ export default function Admin() {
 
       <section className="mb-8">
         <h2 className="mb-3 flex items-center gap-2 font-semibold">
-          <Check size={18} className="text-brand" /> Listings awaiting verification
+          <Check size={18} className="text-primary-ink" /> Listings awaiting verification
         </h2>
         {queue.loading && !queue.data ? (
           <Spinner />
@@ -70,14 +76,14 @@ export default function Admin() {
                 <MapView center={{ lat: c.lat, lng: c.lng }} chargers={[c]} zoom={15} className="h-36 w-full" />
                 <div className="space-y-2 p-4">
                   <div className="font-semibold">{c.name}</div>
-                  <div className="text-sm text-slate-500">
+                  <div className="text-sm text-muted">
                     by {c.owner_name} · {c.address}
                   </div>
                   <div className="text-sm">
                     {c.connector} · {c.mode} · {c.power_kw} kW · {formatINR(c.price_per_kwh_paise)}/kWh
                   </div>
-                  {c.description && <p className="text-sm text-slate-600">“{c.description}”</p>}
-                  <ul className="list-disc pl-5 text-xs text-slate-500">
+                  {c.description && <p className="text-sm text-muted-2">“{c.description}”</p>}
+                  <ul className="list-disc pl-5 text-xs text-muted">
                     <li>Check owner ID and authority over the property</li>
                     <li>Check equipment photos and electrical safety evidence</li>
                   </ul>
@@ -101,23 +107,23 @@ export default function Admin() {
           <h2 className="mb-3 flex items-center gap-2 font-semibold">
             <ShieldAlert size={18} className="text-amber-500" /> Risk flags
           </h2>
-          <p className="mb-3 text-xs text-slate-500">Rule-based triage: duplicates, price outliers, repeated reports, cancellation spikes. Flags are for review only.</p>
+          <p className="mb-3 text-xs text-muted">Rule-based triage: duplicates, price outliers, repeated reports, cancellation spikes. Flags are for review only.</p>
           {risk.data?.length === 0 && <Empty title="No risk flags" />}
           <div className="space-y-3">
             {risk.data?.map((f) => (
               <Card key={f.target_id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs font-semibold text-slate-400 uppercase">{f.target_type}</div>
+                    <div className="text-xs font-semibold text-faint uppercase">{f.target_type}</div>
                     <div className="font-semibold">{f.target_label}</div>
                   </div>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${f.score >= 0.75 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"}`}>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${f.score >= 0.75 ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
                     risk {Math.round(f.score * 100)}
                   </span>
                 </div>
                 <ul className="mt-2 space-y-1">
                   {f.signals.map((s) => (
-                    <li key={s} className="flex items-start gap-2 text-sm text-slate-600">
+                    <li key={s} className="flex items-start gap-2 text-sm text-muted-2">
                       <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" /> {s}
                     </li>
                   ))}
@@ -129,7 +135,7 @@ export default function Admin() {
 
         <section>
           <h2 className="mb-3 flex items-center gap-2 font-semibold">
-            <Flag size={18} className="text-rose-500" /> User reports
+            <Flag size={18} className="text-rose-500" /> Reports & support cases
           </h2>
           {reports.data?.length === 0 && <Empty title="No reports">Drivers can report a listing from its page.</Empty>}
           <div className="space-y-3">
@@ -137,8 +143,11 @@ export default function Admin() {
               <Card key={r.id} className={`p-4 ${r.status === "resolved" ? "opacity-60" : ""}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
+                    <span className={`mb-1 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${r.target_type === "booking" ? "bg-primary/15 text-primary-ink" : "bg-rose-50 text-rose-700"}`}>
+                      {r.target_type === "booking" ? `Support · ${r.category.replace(/_/g, " ")}` : "Report"}
+                    </span>
                     <div className="font-semibold">{r.target_label}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted">
                       by {r.reporter_name} · {formatDateTime(r.created_at)}
                     </div>
                   </div>
@@ -157,6 +166,37 @@ export default function Admin() {
           </div>
         </section>
       </div>
+
+      <section className="mt-8">
+        <h2 className="mb-3 flex items-center gap-2 font-semibold">
+          <History size={18} className="text-muted" /> Audit log
+        </h2>
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-surface-2 text-xs text-muted">
+              <tr>
+                <th className="px-4 py-2 font-medium">When</th>
+                <th className="px-4 py-2 font-medium">Who</th>
+                <th className="px-4 py-2 font-medium">Action</th>
+                <th className="px-4 py-2 font-medium">Resource</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {auditLog.data?.map((e) => (
+                <tr key={e.id}>
+                  <td className="px-4 py-2 whitespace-nowrap text-muted">{formatDateTime(e.created_at)}</td>
+                  <td className="px-4 py-2 whitespace-nowrap">{e.actor_name}</td>
+                  <td className="px-4 py-2 font-mono text-xs">{e.action}</td>
+                  <td className="px-4 py-2 text-xs text-muted">
+                    {e.resource_type} · {e.resource_id.slice(0, 8)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {auditLog.data?.length === 0 && <p className="p-4 text-sm text-muted">No actions yet.</p>}
+        </Card>
+      </section>
     </div>
   );
 }

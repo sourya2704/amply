@@ -4,20 +4,22 @@ import { Check, Plus, X } from "lucide-react";
 import { api } from "../lib/api";
 import { useFetch } from "../lib/auth";
 import { formatINR, formatRange, KORAMANGALA, WEEKDAYS } from "../lib/format";
-import type { Booking, ChargerDetail } from "../lib/types";
+import type { Booking, ChargerDetail, Payout } from "../lib/types";
 import { MapView } from "../components/MapView";
 import { AvailabilityBadge, Button, Card, Empty, ErrorNote, PageHeader, Spinner, StatusPill } from "../components/ui";
 
 const statusChip: Record<string, string> = {
   approved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  submitted: "bg-amber-50 text-amber-800 ring-amber-200",
+  submitted: "bg-amber-50 text-amber-700 ring-amber-200",
   rejected: "bg-rose-50 text-rose-700 ring-rose-200",
+  paused: "bg-surface-3 text-muted-2 ring-line",
 };
-const statusText: Record<string, string> = { approved: "Live", submitted: "Under review", rejected: "Rejected" };
+const statusText: Record<string, string> = { approved: "Live", submitted: "Under review", rejected: "Not approved", paused: "Paused" };
 
 export default function Owner() {
   const chargers = useFetch(() => api.get<ChargerDetail[]>("/api/owner/chargers"), [], 8000);
   const bookings = useFetch(() => api.get<Booking[]>("/api/owner/bookings"), [], 4000);
+  const payouts = useFetch(() => api.get<Payout[]>("/api/owner/payouts"), [], 10000);
   const [err, setErr] = useState<string | null>(null);
 
   const act = async (id: string, action: "accept" | "reject") => {
@@ -32,7 +34,21 @@ export default function Owner() {
 
   const requests = bookings.data?.filter((b) => b.status === "requested") ?? [];
   const others = bookings.data?.filter((b) => b.status !== "requested") ?? [];
-  const earned = others.filter((b) => b.status === "completed").reduce((s, b) => s + b.price.energy_cost_paise, 0);
+  const earned = payouts.data?.reduce((s, p) => s + p.amount_paise, 0) ?? 0;
+
+  const listing = async (fn: () => Promise<unknown>) => {
+    setErr(null);
+    try {
+      await fn();
+      chargers.reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+  const editPrice = (c: ChargerDetail) => {
+    const v = window.prompt(`New price for ${c.name} (₹ per kWh)`, String(c.price_per_kwh_paise / 100));
+    if (v && Number(v) > 0) listing(() => api.patch(`/api/owner/chargers/${c.id}`, { price_per_kwh_paise: Math.round(Number(v) * 100) }));
+  };
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
@@ -48,10 +64,10 @@ export default function Owner() {
         {[
           ["Pending requests", requests.length],
           ["Chargers", chargers.data?.length ?? 0],
-          ["Earned (completed)", formatINR(earned)],
+          ["Earned", formatINR(earned)],
         ].map(([k, v]) => (
           <Card key={k as string} className="p-4">
-            <div className="text-xs text-slate-500">{k}</div>
+            <div className="text-xs text-muted">{k}</div>
             <div className="mt-1 text-2xl font-bold">{v}</div>
           </Card>
         ))}
@@ -72,7 +88,7 @@ export default function Owner() {
                 <div className="font-semibold">
                   {b.driver.name} wants {b.charger.name}
                 </div>
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-muted">
                   {formatRange(b.start_at, b.end_at)} · {b.price.energy_kwh} kWh · you earn ≈ {formatINR(b.price.energy_cost_paise)}
                 </div>
               </div>
@@ -94,7 +110,7 @@ export default function Owner() {
           <h2 className="mt-8 mb-3 font-semibold">Other bookings</h2>
           <div className="space-y-2">
             {others.map((b) => (
-              <Link key={b.id} to={`/bookings/${b.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3 text-sm ring-1 ring-slate-200 hover:ring-brand/40">
+              <Link key={b.id} to={`/bookings/${b.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface p-3 text-sm ring-1 ring-line hover:ring-primary/40">
                 <span>
                   <b>{b.driver.name}</b> · {b.charger.name} · {formatRange(b.start_at, b.end_at)}
                 </span>
@@ -113,21 +129,54 @@ export default function Owner() {
               <div className="font-semibold">{c.name}</div>
               <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${statusChip[c.status]}`}>{statusText[c.status]}</span>
             </div>
-            <div className="mt-1 text-sm text-slate-500">
+            <div className="mt-1 text-sm text-muted">
               {c.connector} · {c.mode} · {c.power_kw} kW · {formatINR(c.price_per_kwh_paise)}/kWh
             </div>
             <div className="mt-2">
               <AvailabilityBadge availability={c.availability} />
             </div>
+            {c.status === "rejected" && c.review_note && <p className="mt-2 text-xs text-rose-700">Reviewer note: {c.review_note}</p>}
+            {["approved", "paused"].includes(c.status) && (
+              <div className="mt-3 flex gap-2 border-t border-line pt-3">
+                <Button variant="secondary" className="py-1.5 text-xs" onClick={() => editPrice(c)}>
+                  Edit price
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="py-1.5 text-xs"
+                  onClick={() => listing(() => api.post(`/api/owner/chargers/${c.id}/${c.status === "paused" ? "resume" : "pause"}`))}
+                >
+                  {c.status === "paused" ? "Resume bookings" : "Pause bookings"}
+                </Button>
+              </div>
+            )}
           </Card>
         ))}
         {chargers.data?.length === 0 && <Empty title="No chargers yet">List your first charger to start earning.</Empty>}
       </div>
+
+      {payouts.data && payouts.data.length > 0 && (
+        <>
+          <h2 className="mt-8 mb-3 font-semibold">Payouts</h2>
+          <Card className="divide-y divide-line p-0">
+            {payouts.data.map((p) => (
+              <div key={p.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                <span>{p.charger_name}</span>
+                <span className="flex items-center gap-3">
+                  <b>{formatINR(p.amount_paise)}</b>
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">{p.status}</span>
+                </span>
+              </div>
+            ))}
+          </Card>
+          <p className="mt-2 text-xs text-muted">You earn the energy cost; Amply keeps the service fee. Payouts settle weekly.</p>
+        </>
+      )}
     </div>
   );
 }
 
-const input = "mt-1 w-full rounded-xl bg-white px-3 py-2 text-sm ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-brand";
+const input = "mt-1 w-full rounded-xl bg-surface px-3 py-2 text-sm ring-1 ring-line outline-none focus:ring-2 focus:ring-primary";
 
 export function NewCharger() {
   const nav = useNavigate();
@@ -232,7 +281,7 @@ export function NewCharger() {
                   type="button"
                   key={d}
                   onClick={() => setDays(days.includes(i) ? days.filter((x) => x !== i) : [...days, i].sort())}
-                  className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${days.includes(i) ? "bg-brand text-white" : "bg-slate-100 text-slate-500"}`}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${days.includes(i) ? "bg-primary text-ink" : "bg-surface-3 text-muted"}`}
                 >
                   {d}
                 </button>
