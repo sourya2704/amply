@@ -24,6 +24,7 @@ type Config struct {
 	AuthSecret  string
 	CORSOrigins string
 	RouteURL    string // OSRM server; empty disables road routing (straight-line estimate)
+	GeocodeURL  string // Nominatim server; empty disables address search (pilot areas only)
 	DemoMode    bool   // one-click demo accounts on the login page
 }
 
@@ -36,22 +37,27 @@ type App struct {
 	pending     pendingStore
 	rzp         *razorpay
 	authLimiter *rateLimiter
+	geo         *geocoder
 }
 
 func main() {
 	reset := flag.Bool("reset", false, "wipe the database and reload seed data")
 	flag.Parse()
+	if os.Getenv("RESET_DB_ON_START") == "true" {
+		*reset = true
+	}
 
 	loadDotEnv(".env")
 	cfg := Config{
 		Port:        env("PORT", "8000"),
-		DatabaseURL: env("DATABASE_URL", "postgres://amply:amply@localhost:5433/amply?sslmode=disable"),
+		DatabaseURL: env("DATABASE_URL", "postgres://amply:amply@localhost:5434/amply?sslmode=disable"),
 		SeedDir:     env("SEED_DIR", "seed"),
 		StaticDir:   env("STATIC_DIR", "../frontend/dist"),
 		AgentModel:  env("AGENT_MODEL", "claude-opus-5-5"),
 		AuthSecret:  env("AUTH_SECRET", "dev-only-secret-change-me"),
 		CORSOrigins: env("CORS_ORIGINS", "*"),
 		RouteURL:    env("ROUTE_URL", "https://router.project-osrm.org"),
+		GeocodeURL:  env("GEOCODE_URL", "https://nominatim.openstreetmap.org"),
 		DemoMode:    env("DEMO_MODE", "true") == "true",
 	}
 	if cfg.AuthSecret == "dev-only-secret-change-me" {
@@ -79,7 +85,7 @@ func main() {
 		log.Printf("seeded database from %s/", cfg.SeedDir)
 	}
 
-	app := &App{db: db, cfg: cfg, now: time.Now, authLimiter: newRateLimiter(10),
+	app := &App{db: db, cfg: cfg, now: time.Now, authLimiter: newRateLimiter(10), geo: newGeocoder(cfg.GeocodeURL),
 		rzp: newRazorpay(os.Getenv("RAZORPAY_KEY_ID"), os.Getenv("RAZORPAY_KEY_SECRET"))}
 	mode := "offline mode (set ANTHROPIC_API_KEY to enable the AI model)"
 	if os.Getenv("ANTHROPIC_API_KEY") != "" {

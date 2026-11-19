@@ -1,6 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell } from "lucide-react";
+import { BadgeCheck, Bell, CalendarX, Check, CircleAlert, CreditCard, Inbox, LifeBuoy, Star, Wallet, Zap, type LucideIcon } from "lucide-react";
+
+const ICONS: Record<string, LucideIcon> = {
+  booking_requested: Inbox,
+  booking_accepted: Check,
+  booking_confirmed: CreditCard,
+  booking_rejected: CalendarX,
+  booking_cancelled: CalendarX,
+  booking_expired: CalendarX,
+  session_started: Zap,
+  session_completed: Zap,
+  payout_pending: Wallet,
+  review: Star,
+  listing_approved: BadgeCheck,
+  listing_rejected: CircleAlert,
+  case_opened: LifeBuoy,
+  case_resolved: LifeBuoy,
+};
 import { api } from "../lib/api";
 import { useFetch } from "../lib/auth";
 import { formatDateTime } from "../lib/format";
@@ -43,20 +60,28 @@ export function NotificationBell() {
         <div className="animate-pop absolute right-0 mt-2 max-h-[70vh] w-80 overflow-y-auto rounded-2xl bg-surface text-ink shadow-xl ring-1 ring-line">
           <div className="border-b border-line px-4 py-3 text-sm font-semibold">Notifications</div>
           {data?.items.length === 0 && <p className="px-4 py-6 text-center text-sm text-muted">You're all caught up.</p>}
-          {data?.items.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => {
-                setOpen(false);
-                if (n.link) nav(n.link);
-              }}
-              className={`block w-full border-b border-line px-4 py-3 text-left hover:bg-surface-2 ${n.read ? "" : "bg-primary/10"}`}
-            >
-              <div className="text-sm font-semibold">{n.title}</div>
-              {n.body && <div className="mt-0.5 text-xs text-muted-2">{n.body}</div>}
-              <div className="mt-1 text-[11px] text-faint">{formatDateTime(n.created_at)}</div>
-            </button>
-          ))}
+          {data?.items.map((n) => {
+            const Icon = ICONS[n.type] ?? Bell;
+            return (
+              <button
+                key={n.id}
+                onClick={() => {
+                  setOpen(false);
+                  if (n.link) nav(n.link);
+                }}
+                className={`flex w-full gap-3 border-b border-line px-4 py-3 text-left hover:bg-surface-2 ${n.read ? "" : "bg-primary-soft/60"}`}
+              >
+                <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${n.read ? "bg-surface-3 text-muted-2" : "bg-primary text-ink"}`}>
+                  <Icon size={15} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold">{n.title}</span>
+                  {n.body && <span className="mt-0.5 block text-xs text-muted-2">{n.body}</span>}
+                  <span className="mt-1 block text-[11px] text-muted">{formatDateTime(n.created_at)}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

@@ -1,7 +1,9 @@
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText, LifeBuoy, Lock, Mail, Plus, ReceiptIndianRupee, ShieldCheck, type LucideIcon } from "lucide-react";
+import { useAuth } from "../lib/auth";
 import { SiteFooter } from "../components/SiteFooter";
 import { Wordmark } from "../components/Logo";
+import { IconTile, usePageTitle } from "../components/ui";
 
 // Public help & legal pages. The legal texts are a plain-language draft for the pilot and must be
 // reviewed by a lawyer before Amply takes real payments (see PRD §10, "Regulatory and commercial review").
@@ -11,10 +13,10 @@ interface Section {
   a: string;
 }
 
-const PAGES: Record<string, { title: string; emoji: string; intro: string; sections: Section[] }> = {
+const PAGES: Record<string, { title: string; icon: LucideIcon; intro: string; sections: Section[] }> = {
   help: {
     title: "Help centre",
-    emoji: "🛟",
+    icon: LifeBuoy,
     intro: "Quick answers to the things people ask us most.",
     sections: [
       { q: "How do I know a charger fits my EV?", a: "Add your EV under My EVs. Amply checks the plug type (CCS2, Type 2, CHAdeMO, GB/T) and AC/DC support, and hides chargers that won't work. If a spec is missing, we say “compatibility unknown” instead of guessing." },
@@ -28,7 +30,7 @@ const PAGES: Record<string, { title: string; emoji: string; intro: string; secti
   },
   safety: {
     title: "Safety",
-    emoji: "🦺",
+    icon: ShieldCheck,
     intro: "Charging should be boring, in the best way. Here's how we keep it that way.",
     sections: [
       { q: "Verified listings", a: "Every charger is reviewed by the Amply team before it goes live. Listings that look duplicated or unusually priced are flagged for a human to check." },
@@ -39,7 +41,7 @@ const PAGES: Record<string, { title: string; emoji: string; intro: string; secti
   },
   contact: {
     title: "Contact us",
-    emoji: "💌",
+    icon: Mail,
     intro: "Real humans, based in Bengaluru.",
     sections: [
       { q: "Need help with a booking?", a: "The fastest way is “Get help with this booking” on the booking page. It sends us all the details automatically." },
@@ -50,7 +52,7 @@ const PAGES: Record<string, { title: string; emoji: string; intro: string; secti
   },
   terms: {
     title: "Terms of use",
-    emoji: "📜",
+    icon: FileText,
     intro: "Draft terms for the Amply pilot, in plain language. Not yet reviewed by a lawyer.",
     sections: [
       { q: "What Amply is", a: "A marketplace that connects EV drivers with charger owners and lists public stations. Amply does not own the chargers listed by hosts." },
@@ -62,7 +64,7 @@ const PAGES: Record<string, { title: string; emoji: string; intro: string; secti
   },
   privacy: {
     title: "Privacy",
-    emoji: "🔐",
+    icon: Lock,
     intro: "We collect only what we need to run charging bookings.",
     sections: [
       { q: "What we collect", a: "Your name, email, vehicles, bookings and messages you send to support. Location is used only when you tap “Near me”, and isn't stored." },
@@ -73,7 +75,7 @@ const PAGES: Record<string, { title: string; emoji: string; intro: string; secti
   },
   refunds: {
     title: "Cancellations & refunds",
-    emoji: "💸",
+    icon: ReceiptIndianRupee,
     intro: "Simple rules, no fine print.",
     sections: [
       { q: "Before the session", a: "Cancel any time before your slot starts for a full refund." },
@@ -89,8 +91,12 @@ export const INFO_LINKS = Object.entries(PAGES).map(([slug, p]) => ({ slug, titl
 export default function Info() {
   const { topic = "help" } = useParams();
   const page = PAGES[topic] ?? PAGES.help;
+  usePageTitle(page.title);
+  const { user } = useAuth();
   return (
     <div className="flex min-h-screen flex-col bg-surface">
+      {/* signed-in users already have the app's top bar */}
+      {!user && (
       <header className="flex items-center justify-between px-5 py-4 sm:px-10">
         <Link to="/login" aria-label="Amply home">
           <Wordmark size={42} />
@@ -99,16 +105,17 @@ export default function Info() {
           <ArrowLeft size={15} /> Back
         </Link>
       </header>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-8 sm:px-10">
-        <div className="text-5xl">{page.emoji}</div>
-        <h1 className="mt-3 text-4xl">{page.title}</h1>
+      )}
+      <main className="mx-auto w-full max-w-3xl flex-1 px-5 pt-8 pb-28 sm:px-10 md:pb-12">
+        <IconTile icon={page.icon} size={52} />
+        <h1 className="mt-4 text-4xl">{page.title}</h1>
         <p className="mt-2 text-lg text-muted-2">{page.intro}</p>
         <div className="mt-8 space-y-3">
           {page.sections.map((s) => (
             <details key={s.q} className="group rounded-2xl bg-surface-2 p-5 open:bg-primary-soft" open={page.sections.length <= 5}>
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold">
                 {s.q}
-                <span className="text-xl transition group-open:rotate-45">+</span>
+                <Plus size={18} className="shrink-0 transition group-open:rotate-45" />
               </summary>
               <p className="mt-2 text-sm leading-relaxed text-muted-2">{s.a}</p>
             </details>

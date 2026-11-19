@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet";
+import { Circle, CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from "react-leaflet";
+import L from "leaflet";
 import { Link } from "react-router-dom";
 import { availabilityStyle, formatINR } from "../lib/format";
 import type { ChargerSummary } from "../lib/types";
@@ -15,6 +16,9 @@ function Recenter({ lat, lng, padLeft = 0 }: { lat: number; lng: number; padLeft
   }, [lat, lng, padLeft, map]);
   return null;
 }
+
+// Pulsing "you are here" dot (CSS in index.css → .me-dot).
+const meIcon = L.divIcon({ className: "", html: '<span class="me-dot"></span>', iconSize: [22, 22], iconAnchor: [11, 11] });
 
 function FitRoute({ route }: { route: [number, number][] }) {
   const map = useMap();
@@ -39,6 +43,7 @@ export function MapView({
   className = "h-full w-full",
   route,
   padLeft = 0,
+  me,
 }: {
   center: { lat: number; lng: number };
   chargers?: ChargerSummary[];
@@ -49,7 +54,11 @@ export function MapView({
   className?: string;
   route?: [number, number][];
   padLeft?: number;
+  /** The driver's live location, if shared. */
+  me?: { lat: number; lng: number; accuracy: number } | null;
 }) {
+  // While following the driver, the search centre is (within ~250 m of) their live dot, so draw only the dot.
+  const centerIsMe = !!me && Math.abs(me.lat - center.lat) < 0.0025 && Math.abs(me.lng - center.lng) < 0.0025;
   return (
     <MapContainer center={[center.lat, center.lng]} zoom={zoom} className={className} scrollWheelZoom zoomControl={false}>
       <ZoomControl position="topright" />
@@ -69,7 +78,17 @@ export function MapView({
         <Recenter lat={center.lat} lng={center.lng} padLeft={padLeft} />
       )}
       {onPick && <ClickToPick onPick={onPick} />}
-      {!onPick && (
+      {me && (
+        <>
+          <Circle center={[me.lat, me.lng]} radius={Math.min(me.accuracy, 500)} pathOptions={{ color: "#ff86bf", weight: 1, fillColor: "#ffa3cf", fillOpacity: 0.18 }} />
+          <Marker position={[me.lat, me.lng]} icon={meIcon} zIndexOffset={1000}>
+            <Tooltip direction="top" offset={[0, -10]}>
+              You are here
+            </Tooltip>
+          </Marker>
+        </>
+      )}
+      {!onPick && !centerIsMe && (
         <CircleMarker center={[center.lat, center.lng]} radius={7} pathOptions={{ color: "#ffffff", fillColor: "#111111", fillOpacity: 1, weight: 3 }}>
           <Tooltip>Search centre</Tooltip>
         </CircleMarker>

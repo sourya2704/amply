@@ -116,7 +116,7 @@ notifications, automated owner payouts (tracked, settled manually), and multilin
 
 ## Run it locally
 ```bash
-docker compose up -d db                              # Postgres + PostGIS on localhost:5433
+docker compose up -d db                              # Postgres + PostGIS on localhost:5434
 cd frontend && npm install && npm run build
 cd ../backend && cp .env.example .env && go run . -reset   # http://localhost:8000
 ```
@@ -125,7 +125,7 @@ Log in with a demo account on the login page (password `demo1234`), or create yo
 
 Tests (need the database running):
 ```bash
-cd backend && TEST_DATABASE_URL="postgres://amply:amply@localhost:5433/amply_test?sslmode=disable" go test ./...
+cd backend && TEST_DATABASE_URL="postgres://amply:amply@localhost:5434/amply_test?sslmode=disable" go test ./...
 ```
 
 Docs: [team guide](docs/WORKFLOW.md) · [API contract](docs/api-contract.md) · [demo script](docs/demo-script.md) · [pitch outline](pitch/pitch-outline.md)

@@ -28,6 +28,15 @@ export const availabilityStyle: Record<AvailabilitySource, { dot: string; chip: 
   unknown: { dot: "bg-faint", chip: "bg-surface-3 text-muted-2 ring-line", pin: "#a3a3a3" },
 };
 
+/** Short availability names for tight spaces (badges elsewhere use the API's full label). */
+export const availabilityShort: Record<AvailabilitySource, string> = {
+  live: "Live",
+  schedule: "Owner schedule",
+  reported: "User-reported",
+  stale: "Stale",
+  unknown: "Unconfirmed",
+};
+
 export const statusStyle: Record<BookingStatus, string> = {
   requested: "bg-amber-50 text-amber-700 ring-amber-200",
   accepted: "bg-primary-soft text-primary-ink ring-primary/60",

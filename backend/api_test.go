@@ -17,7 +17,7 @@ import (
 )
 
 // Tests need Postgres + PostGIS:  docker compose up -d db
-//   TEST_DATABASE_URL=postgres://amply:amply@localhost:5433/amply_test?sslmode=disable go test ./...
+//   TEST_DATABASE_URL=postgres://amply:amply@localhost:5434/amply_test?sslmode=disable go test ./...
 
 func TestMain(m *testing.M) {
 	bcryptCost = bcrypt.MinCost
@@ -53,7 +53,7 @@ func newTestApp(t *testing.T) *testEnv {
 		t.Fatal(err)
 	}
 	env := &testEnv{clock: fixedNow}
-	env.app = &App{db: db, now: func() time.Time { return env.clock }, rzp: newRazorpay("", ""), authLimiter: newRateLimiter(10),
+	env.app = &App{db: db, now: func() time.Time { return env.clock }, rzp: newRazorpay("", ""), authLimiter: newRateLimiter(10), geo: newGeocoder(""),
 		cfg: Config{AuthSecret: "test", CORSOrigins: "*", StaticDir: t.TempDir(), DemoMode: true}}
 	env.srv = httptest.NewServer(env.app.routes())
 	t.Cleanup(func() { env.srv.Close(); db.Close() })
@@ -503,6 +503,15 @@ func TestSupportCaseAndRoute(t *testing.T) {
 	}
 	if plan.Source != "estimate" || plan.EstimatedRangeKM == nil || plan.NeedsCharge == nil || !*plan.NeedsCharge || len(plan.SuggestedStops) == 0 {
 		t.Fatalf("route plan: %+v", plan)
+	}
+	// Address search falls back to the pilot areas when the geocoder is unavailable.
+	var geo struct {
+		Results []Place
+		Source  string
+	}
+	e.call(t, "GET", "/api/geocode?q=kora", driver, nil, &geo)
+	if geo.Source != "local" || len(geo.Results) != 1 || geo.Results[0].Name != "Koramangala" {
+		t.Errorf("geocode fallback: %+v", geo)
 	}
 	for _, s := range plan.SuggestedStops {
 		if s.Compatibility == "incompatible" {

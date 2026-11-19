@@ -133,20 +133,20 @@ export function AgentPanel({ location }: { location?: { lat: number; lng: number
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`fixed right-4 bottom-4 z-[1000] flex items-center gap-2 rounded-full bg-primary py-3 pr-5 pl-4 font-bold text-ink shadow-xl shadow-primary-dark/40 transition hover:scale-105 sm:right-6 sm:bottom-6 ${open ? "hidden" : ""}`}
+        className={`fixed right-4 bottom-20 z-[1000] md:bottom-6 flex items-center gap-2 rounded-full bg-primary py-3 pr-5 pl-4 font-bold text-ink shadow-xl shadow-primary-dark/40 transition hover:scale-105 sm:right-6 ${open ? "hidden" : ""}`}
       >
         <Sparkles size={18} className="text-ink" /> Ask Amply AI
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[1001] flex flex-col bg-surface shadow-2xl sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[min(720px,calc(100vh-6rem))] sm:w-[420px] sm:rounded-3xl sm:ring-1 sm:ring-line">
-          <div className="flex items-center justify-between rounded-t-3xl bg-navy px-5 py-4 text-white">
+        <div className="fixed inset-0 z-[1200] flex flex-col bg-surface shadow-2xl sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[min(720px,calc(100vh-6rem))] sm:w-[420px] sm:rounded-3xl sm:ring-1 sm:ring-line">
+          <div className="flex items-center justify-between bg-navy px-5 py-4 text-white sm:rounded-t-3xl">
             <div className="flex items-center gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-navy">
                 <Bot size={20} />
               </div>
               <div>
-                <div className="font-semibold">Amply AI</div>
+                <div className="font-extrabold">Amply AI</div>
                 <div className="text-xs text-white/60">{vehicle ? `For your ${vehicle.make} ${vehicle.model}` : "No vehicle selected"}</div>
               </div>
             </div>
@@ -165,7 +165,7 @@ export function AgentPanel({ location }: { location?: { lat: number; lng: number
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    className="block w-full rounded-xl bg-surface-2 px-3 py-2.5 text-left text-sm text-ink ring-1 ring-line transition hover:bg-primary/15 hover:ring-primary/40"
+                    className="block w-full rounded-xl bg-surface-2 px-3.5 py-3 text-left text-sm font-semibold text-ink transition hover:bg-primary-soft"
                   >
                     {s}
                   </button>

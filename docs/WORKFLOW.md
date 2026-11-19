@@ -5,7 +5,7 @@ tools and trust & safety. This guide is how to run, test, demo and deploy it.
 
 ## Run it locally
 ```bash
-docker compose up -d db                                    # Postgres + PostGIS on localhost:5433 (+ amply_test DB)
+docker compose up -d db                                    # Postgres + PostGIS on localhost:5434 (+ amply_test DB)
 cd frontend && npm install && npm run build                # builds the web app into frontend/dist
 cd ../backend && cp .env.example .env && go run . -reset   # API + web app on http://localhost:8000, fresh demo data
 ```
@@ -19,7 +19,7 @@ cd ../backend && cp .env.example .env && go run . -reset   # API + web app on ht
 
 ## Tests
 ```bash
-cd backend && TEST_DATABASE_URL="postgres://amply:amply@localhost:5433/amply_test?sslmode=disable" go test ./...
+cd backend && TEST_DATABASE_URL="postgres://amply:amply@localhost:5434/amply_test?sslmode=disable" go test ./...
 ```
 Covered: auth (hashing, token expiry, rate limit, no self-granted admin), booking → accept → pay → cancel+refund →
 re-book, start → complete → payout → review, notifications, hold expiry releasing the slot, 20 concurrent overlapping

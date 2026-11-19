@@ -22,5 +22,5 @@ COPY backend/seed ./seed
 COPY --from=web /app/frontend/dist /app/frontend/dist
 ENV PORT=8000
 EXPOSE 8000
-# -reset loads fresh demo data on every start, which is what a demo wants.
-CMD ["./amply", "-reset"]
+# Seeds demo data only into an empty database. Set RESET_DB_ON_START=true to wipe and reseed on boot.
+CMD ["./amply"]

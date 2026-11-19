@@ -46,6 +46,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("GET /api/chargers/{id}/estimate", auth(a.getEstimate))
 	mux.HandleFunc("GET /api/chargers/{id}/reviews", auth(a.chargerReviews))
 	mux.HandleFunc("GET /api/route", auth(a.planRoute))
+	mux.HandleFunc("GET /api/geocode", auth(a.geocodeSearch))
 
 	mux.HandleFunc("POST /api/bookings", auth(a.createBooking))
 	mux.HandleFunc("GET /api/bookings", auth(a.listMyBookings))
