@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "./auth";
 
 // Live device location for the map. Asked for only when the driver taps "Use my location" (PRD §10:
 // request location at the point it's useful). Positions stay in the browser; the app only sends the current
@@ -12,18 +13,23 @@ export interface LiveLocation {
   accuracy: number; // metres
 }
 
-const PREF_KEY = "amply_live_location";
+// The "keep location on" choice is remembered per account, so logging in as someone else on the same browser
+// never turns location on automatically.
+const prefKey = (userId: string) => `amply_live_location:${userId}`;
 
-function remember(on: boolean) {
+function remember(userId: string | undefined, on: boolean) {
+  if (!userId) return;
   try {
-    if (on) localStorage.setItem(PREF_KEY, "on");
-    else localStorage.removeItem(PREF_KEY);
+    if (on) localStorage.setItem(prefKey(userId), "on");
+    else localStorage.removeItem(prefKey(userId));
   } catch {
     /* storage unavailable */
   }
 }
 
 export function useLiveLocation() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const [status, setStatus] = useState<LocationStatus>("off");
   const [position, setPosition] = useState<LiveLocation | null>(null);
   const watchId = useRef<number | null>(null);
@@ -32,8 +38,8 @@ export function useLiveLocation() {
     if (watchId.current !== null) navigator.geolocation?.clearWatch(watchId.current);
     watchId.current = null;
     setStatus("off");
-    remember(false);
-  }, []);
+    remember(userId, false);
+  }, [userId]);
 
   const start = useCallback(() => {
     if (!("geolocation" in navigator)) {
@@ -46,23 +52,25 @@ export function useLiveLocation() {
       (p) => {
         setPosition({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy });
         setStatus("on");
-        remember(true);
+        remember(userId, true);
       },
       (err) => {
         if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
         watchId.current = null;
         setStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable");
-        if (err.code === err.PERMISSION_DENIED) remember(false);
+        if (err.code === err.PERMISSION_DENIED) remember(userId, false);
       },
       { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 },
     );
-  }, []);
+  }, [userId]);
 
   // Resume automatically only if the driver turned it on before and the browser still allows it.
   useEffect(() => {
+    if (!userId) return;
     let wanted = false;
     try {
-      wanted = localStorage.getItem(PREF_KEY) === "on";
+      localStorage.removeItem("amply_live_location"); // old browser-wide setting
+      wanted = localStorage.getItem(prefKey(userId)) === "on";
     } catch {
       /* ignore */
     }
@@ -73,7 +81,7 @@ export function useLiveLocation() {
         if (s.state === "granted") start();
       })
       .catch(() => {});
-  }, [start]);
+  }, [start, userId]);
 
   useEffect(
     () => () => {
