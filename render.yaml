@@ -1,12 +1,7 @@
-# Render Blueprint: one click creates the Postgres database and the Amply web service.
+# Render Blueprint for the Amply web service.
 # Render dashboard → New → Blueprint → pick this repo.
-databases:
-  - name: amply-db
-    plan: free
-    region: singapore
-    databaseName: amply
-    user: amply
-
+# The database lives outside Render (e.g. Neon, free, with PostGIS): paste its connection string
+# as DATABASE_URL when Render asks. The app enables PostGIS and loads demo data on first start.
 services:
   - type: web
     name: amply
@@ -16,9 +11,7 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: amply-db
-          property: connectionString
+        sync: false
       - key: AUTH_SECRET
         generateValue: true
       - key: DEMO_MODE

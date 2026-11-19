@@ -41,11 +41,11 @@ approve, pause, resume, edit), risk flags, reports, the audit log, support cases
 | Web app pages | `frontend/src/pages/*` |
 | Demo data | `backend/seed/*.json` |
 
-## Deploy (Render, Railway, Fly.io, or any Docker host)
-1. Create a **Postgres database with PostGIS** (Render Postgres, Neon and Supabase all support it). The app runs
-   `CREATE EXTENSION postgis` itself on first start.
-2. Deploy this repo with the **Dockerfile**.
-3. Set environment variables: `DATABASE_URL` (from step 1), `AUTH_SECRET` (long random text), and optionally
-   `ANTHROPIC_API_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`.
-4. The container starts with `-reset`, which reloads demo data on every start. That's right for a demo; for real
-   users, change the Dockerfile `CMD` to `["./amply"]` so data persists.
+## Deploy (Render + Neon, both free)
+1. **Database (Neon):** neon.tech → new project, region **AWS Asia Pacific (Singapore)** → copy the connection string
+   (it ends in `?sslmode=require`). The app runs `CREATE EXTENSION postgis` itself on first start.
+2. **App (Render):** dashboard → **New → Blueprint** → pick this repo. Render reads `render.yaml`; paste the Neon
+   connection string as `DATABASE_URL`, leave the optional keys empty, and apply. First build takes ~5–8 minutes.
+3. Demo data loads into the empty database on first start and persists after that. To reseed before a demo, set
+   `RESET_DB_ON_START=true` in Render's Environment tab, redeploy once, then remove it.
+4. Free Render services sleep after 15 minutes idle; the first visit afterwards takes ~50 seconds to wake.
